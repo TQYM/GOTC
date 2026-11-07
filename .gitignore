@@ -1,0 +1,70 @@
+# ==================== macOS ====================
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+
+# ==================== 环境变量与密钥 ====================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.*
+
+# ==================== Node / Next.js ====================
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+next-env.d.ts
+.vercel
+.turbo
+
+# ==================== Python / FastAPI ====================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints
+
+# ==================== 日志与临时文件 ====================
+*.log
+logs/
+tmp/
+*.tmp
+*.swp
+*.swo
+*~
+
+# ==================== 编辑器与 IDE ====================
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# ==================== 模型权重与生成素材（大文件不入库） ====================
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.gguf
+assets/generated/

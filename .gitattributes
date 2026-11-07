@@ -1,0 +1,15 @@
+# 自动处理行尾：提交时归一化为 LF，检出时按平台
+* text=auto eol=lf
+
+# 显式标记二进制，禁止 diff/行尾转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.mp3 binary
+*.mp4 binary

@@ -1,0 +1,45 @@
+name: Bug 报告
+description: 游戏行为不符合预期
+title: "[bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 实际行为，越具体越好
+    validations:
+      required: true
+  - type: textarea
+    id: expect
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 进入某地块
+        2. 放置住宅区
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 影响范围
+      options:
+        - frontend
+        - backend
+        - AI / Prompt
+        - 模拟引擎
+        - 不确定
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境信息
+      placeholder: 浏览器 / Node 或 Python 版本、相关 commit、控制台报错截图
