@@ -10,9 +10,9 @@
 
 | 成员 | GitHub | 职责 |
 |---|---|---|
-| TQYM | [@TQYM](https://github.com/TQYM) | 项目负责 / 前后端 / 架构 |
-| IGNG | [@IGNGserver](https://github.com/IGNGserver) | 后端 / AI 编排 |
-| 慧慧 | [@HuiHuiya](https://github.com/HuiHuiya) | 前端 / 交互与视觉 |
+| TQYM | [@TQYM](https://github.com/TQYM) | 项目负责 / 架构 / 规划文档 |
+| IGNG | [@IGNGserver](https://github.com/IGNGserver) | **后端全部**：sim 引擎 / AI 编排 / SSE / 契约模型 |
+| 慧慧 | [@HuiHuiya](https://github.com/HuiHuiya) | **前端全部**：Canvas 沙盘 / 拖拽交互 / 信息流 / 报告页 |
 
 ## 仓库结构
 
@@ -20,7 +20,8 @@
 .
 ├── frontend/           # Next.js 前端（Canvas 沙盘 + 三栏信息流）
 ├── backend/            # FastAPI 后端（模拟引擎 + AI 编排 + SSE）
-├── docs/               # 设计文档
+├── docs/
+│   ├── plan/           # ⭐ 48h 执行规划（唯一执行依据，从 08 任务卡入手）
 │   ├── game-design.md  # 玩法设计：20 分钟循环
 │   └── architecture.md # 技术架构与 AI 模型分工
 ├── scripts/            # 开发辅助脚本
