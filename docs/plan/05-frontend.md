@@ -1,6 +1,7 @@
 # 05 · 前端方案（Next.js 全栈客户端）
 
 > 前端开发者按本文档施工。唯一接口是 [02 契约](02-data-contract.md)；后端可能随时从桩切到真身，**前端不许依赖任何契约之外的字段或行为**。
+> ⚠️ **渲染层重大变更**：Canvas 2D 伪 2.5D 作废，改为 **Three.js 真 3D + 真实北京 GIS 场景**，全部渲染细则以 [11-real-beijing-3d.md](11-real-beijing-3d.md) 为准；本文档的交互/状态机/信息流规格不变。
 
 ## 1. 技术选型（已定，不再纠结）
 
@@ -13,7 +14,7 @@
 | 服务端状态 | 手写 fetch 封装 + SSE 管理器 | 数据形状由契约死锁，RTK Query/React Query 的收益撑不起学习成本；SSE 本来就要自己管重连 |
 | 拖拽 | @dnd-kit/core | 现行主流、无障碍好，支持工具栏到 Canvas 的多格预览 |
 | 图表 | 自绘 SVG（雷达图/曲线） | 报告页图表就三种，引库反而受制 |
-| 地图渲染 | Canvas 2D（48×48 网格） | DOM 2304 格会卡；Canvas 重绘一帧 <5ms，且方便做格子高亮/扩散动效 |
+| 地图渲染 | **Three.js + @react-three/fiber + drei**（真 3D） | 真实北京场景：既有建筑拉伸 + 玩家区块 instanced，细则 [11 §6](11-real-beijing-3d.md) |
 | 部署 | 同仓库 `frontend/` 目录，`npm run build` 出静态 + Node 运行时 | 比赛现场一条命令起服务 |
 
 ## 2. 页面与组件树
@@ -42,7 +43,7 @@
 
 | 组件 | 职责 | 关键点 |
 |---|---|---|
-| CanvasBoard | 渲染地形/区块/悬停高亮/非法格红显 | 单个 useEffect 管全部重绘；窗口缩放按容器宽度重算格子像素 |
+| CityScene3D | 3D 场景：地形/既有建筑/玩家区块/悬停高亮/非法格红显 | 按 [11 §6](11-real-beijing-3d.md) 分层；Raycaster 拾取换算 r,c；OrbitControls 相机 |
 | ToolBar | 14 种区块的卡牌列表，拖拽源 | 卡片显示造价/占地；资金不足自动置灰（按本地缓存的 funds，真值等后端） |
 | PlacementLayer | 拖拽悬停时的覆盖格预览 | 合法绿框/非法红框；多格区块按 anchor+形状展开 |
 | MetricsPanel | 14 指标仪表盘 | 数值变化时用 300ms 颜色脉冲（升绿降红）提示 delta |
@@ -90,7 +91,7 @@ Zustand store 字段与迁移：
 
 ## 4. 视觉与动效基调
 
-- 整体「规划院蓝图 + 沙盘模型」气质：深蓝灰底、等高线纹理、地块用不同色块的软 3D 等距视角（Canvas 斜投影，伪 2.5D）。
+- 整体「规划院沙盘」气质：真 3D 场景（[11 §6](11-real-beijing-3d.md)），既有建筑灰色系低饱和、玩家建筑按类别色高亮，形成「现状 vs 决策」的视觉对比。
 - 地形配色：flat 米白 / hill 赭石 / river 蓝 / bank 浅蓝 / forest 深绿 / road 灰。
 - 区块配色按大类：住宅暖黄、商业金、工业暗紫、绿地青、服务红、交通蓝、市政灰。
 - 指标脉冲、落子弹跳（200ms）、拆拆除尘、推演镜头缓缓拉远——动效一律 ≤300ms，不抢决策时间。
@@ -98,7 +99,7 @@ Zustand store 字段与迁移：
 ## 5. 性能与兼容
 
 - 首屏 JS ≤300KB gzip（Next 默认就差不多，别乱引库）。
-- Canvas 棋盘每帧绘制 <8ms（实测标准：M 系 Mac Chrome）。
+- 3D 场景帧率：桌面（M 系 Mac Chrome）≥55fps；Android 中端机 WebView ≥30fps；draw call ≤60（[11 §6.4](11-real-beijing-3d.md)）。
 - 目标浏览器：现代 Chromium/Safari 最新两版；比赛演示用 Chrome。
 
 ## 6. 前端验收标准（DoD，逐条打勾）
