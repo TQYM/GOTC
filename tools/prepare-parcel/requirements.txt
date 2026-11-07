@@ -1,0 +1,4 @@
+# 仅离线数据管线需要；FastAPI 运行时不依赖 GIS 原生库。
+pyproj>=3.6,<4
+shapely>=2.0,<3
+PyYAML>=6,<7

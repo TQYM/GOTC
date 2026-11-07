@@ -1,0 +1,16 @@
+beijing_cbd:
+  district_name: 朝阳 CBD–通惠河核心区
+  # 48×48@50m 的 2.4km 核心范围；东西到四惠无法同时满足该网格尺度。
+  bbox: [116.437, 39.900, 116.465, 39.9216]  # west, south, east, north (WGS84)
+  size: 48
+  cell_size_m: 50
+  seed: 20261107
+  height_limit_m: 200
+  green_line_m: 30
+  # 拆迁成本：现状总建筑面积（基底×层数）×系数，单位为元。
+  demolition_yuan_per_m2: 250
+  existing_upkeep_yuan_per_m2: 1
+  # 现状人口/岗位估算：分别按人均/岗均建筑面积。
+  residential_m2_per_person: 30
+  workplace_m2_per_job: 25
+  industrial_m2_per_job: 50

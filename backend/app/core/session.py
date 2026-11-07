@@ -129,7 +129,7 @@ class GameSession:
         self.last_active = time.monotonic()
 
     def _check_phase(self) -> None:
-        if self.phase not in (Phase.BUILD, Phase.POLISH):
+        if self.phase not in (Phase.BUILD, Phase.BUILDING, Phase.POLISH):
             raise GameError(
                 ErrorCode.INVALID_PHASE,
                 f"当前阶段 {self.phase.value} 不允许放置/拆除",
@@ -182,7 +182,7 @@ class GameSession:
     # ---- 操作 ----
 
     def place(
-        self, tile_type: TileType, anchor: list[int]
+        self, tile_type: TileType, anchor: list[int], *, tile_id: str | None = None
     ) -> tuple[Tile, Metrics, MetricsDiff, int]:
         self._touch()
         try:
@@ -217,7 +217,7 @@ class GameSession:
             # 02 §2.2：桥必带朝向；同行=horizontal，同列=vertical
             orientation = "horizontal" if len({r for r, _ in cells}) == 1 else "vertical"
         tile = Tile(
-            id=TILE_ID_PREFIX + secrets.token_hex(4),
+            id=tile_id or TILE_ID_PREFIX + secrets.token_hex(4),
             type=tile_type,
             anchor=list(anchor),
             cells=cells,
@@ -274,7 +274,7 @@ class GameSession:
         self._touch()
         if self.finalized and self.finalize_result is not None:
             return self.finalize_result  # 幂等（06 §6）
-        if self.phase not in (Phase.BUILD, Phase.POLISH):
+        if self.phase not in (Phase.BUILD, Phase.BUILDING, Phase.POLISH):
             raise GameError(
                 ErrorCode.INVALID_PHASE,
                 f"当前阶段 {self.phase.value} 不可推演",

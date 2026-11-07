@@ -26,9 +26,11 @@ class BufferedEvent:
 
 
 class Broadcaster:
-    def __init__(self, capacity: int = SSE_BUFFER_CAPACITY) -> None:
+    def __init__(
+        self, capacity: int = SSE_BUFFER_CAPACITY, *, start_id: int = 0
+    ) -> None:
         self._buffer: deque[BufferedEvent] = deque(maxlen=capacity)
-        self._next_id = 1
+        self._next_id = start_id + 1
         self._subscribers: set[asyncio.Queue[BufferedEvent]] = set()
 
     @property

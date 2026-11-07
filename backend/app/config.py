@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SIM_CONFIG_PATH = Path(__file__).resolve().parent.parent / "sim-config.yaml"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
@@ -21,7 +22,11 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="CITY20_")
 
-    app_version: str = "0.1.0"
+    app_version: str = "0.2.0"
+    database_path: str = str(REPO_ROOT / "data" / "city20.db")
+    snapshot_interval: int = 50
+    parcel_data_dir: str = str(REPO_ROOT / "data" / "parcels")
+    rate_limit_per_minute: int = 300
     llm_api_key: str | None = None  # 不配 key → 全模板降级（验收项）
     llm_base_url: str = "https://api.deepseek.com/v1"
     llm_model: str = "deepseek-chat"

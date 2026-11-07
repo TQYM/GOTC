@@ -72,7 +72,7 @@
 - 估时：3h。
 
 ### PR-13 SSE 网关 —— 后端
-- 前置：PR-10/11/12（事件源）、PR-03（路由）。做什么：[06 §4](06-backend.md)：broadcaster、200 条环形缓冲、15s 心跳、Last-Event-ID 断点补发；tick/phase_change 真事件接入 timer。
+- 前置：PR-10/11/12（事件源）、PR-03（路由）。做什么：[06 §4](06-backend.md)：broadcaster、200 条环形缓冲、15s 心跳、Last-Event-ID 断点补发；现行 saves v2 只广播领域 op/年份/阶段/快照/AI 事件，不存在 tick timer。
 - DoD：前端断连 30s 内重连可补发；缓冲溢出按快照恢复（06 §4 末条）；**合并后联调点 B**。
 - 估时：3h。
 
@@ -84,13 +84,13 @@
 - 估时：4h。
 
 ### PR-15 状态机·城市年份·阶段流转（不限时）—— 前端
-- 前置：PR-14。做什么：[05 §2.4](05-frontend.md) 不限时状态机落地：briefing→building→projecting→report 全迁移只信后端事件/响应；`city_year` 展示与 advance 入口（§3.4）；阶段横幅 + 推演/报告入口。
+- 前置：PR-14。做什么：[05 §2.4](05-frontend.md) 不限时状态落地：持久化 `briefing/building` 只信后端；`projecting/report` 为独立客户端 UI 状态，不写回城市阶段。展示 `city_year` 与 advance 入口，并提供推演/可重复报告入口。
 - DoD：刷新任意阶段现场 100% 恢复；`advance` 后年份正确 +1；无任何倒计时组件；SSE 乱序回放测试不崩（05 DoD-5）。
 - 估时：4h。
 
 ### PR-16 推演动画与报告页 —— 前端
-- 前置：PR-15 + 后端 finalize 真身（随 PR-07/08 已可用）。做什么：后端 finalize 先完整预计算 projection，ProjectionPlayer 再按 `projection_step` 年度快进（[05 §2.3](05-frontend.md)，约 3.5s/年）；报告页消费 scores、ending、结构化 report、city_name，提供五维雷达（自绘 SVG）、结局徽章映射、种子分享、重开。
-- DoD：完整走通建局→建设→推演→报告（不限时，联调点 C）；雷达五维与后端 scores 一致；结局徽章正确映射 6 结局。
+- 前置：PR-15 + saves v2 project/report。做什么：调用只读 `POST /project` 获取完整切片，ProjectionPlayer 在客户端年度快进；报告弹层消费 scores、城市体检标签、结构化 report 与 city_name，提供五维雷达（自绘 SVG）和最近 20 份历史，可关闭后继续经营。
+- DoD：完整走通建城→建设→advance→project→report→关闭报告继续经营；project 不写状态；雷达五维与后端 scores 一致；体检标签正确映射，不使用终局/倒计时语义。
 - 估时：6h。
 
 ## M5 交付（截止 D2 22:00）
@@ -132,7 +132,27 @@
 
 ## M7 真实北京 + 存档体系（穿插执行，细则见 [10](10-persistence-sync.md) / [11](11-real-beijing-3d.md)）
 
-> PR-23~26（不限时/存档/多端同步/城市管理者）任务卡在 [10](10-persistence-sync.md) §PR 卡；以下为真实北京三卡。
+> PR-23~26 原引用不存在，以下补齐正式任务卡。统一接口以 [02](02-data-contract.md) saves v2 为准；PR-25 属前端卡，本次跨栈实施与后端同步联调。
+
+### PR-23 SQLite 事件溯源与不限时 saves API —— 后端
+- 前置：PR-01/02/03/06/07/08。做什么：新增 CityState、SQLite WAL/aiosqlite 仓储、saves/ops/snapshots/reports 表、8 位城市码、确定性 tile ID、per-save 事务与幂等结果；`start/place/remove/advance/project/report/reports/events`；共享年度步进、50 op 快照与增量重放、最近 20 报告。旧 sessions 路由和倒计时不再暴露。
+- DoD：200 个混合 op 重放与在线逐字段一致；>50 op 快照+增量一致；重复 client_op_id 不产生第二次效果且返回首次结果；进程/仓储重建后城市码完整恢复；project 零写入；无 AI 全链路可玩；7 个错误码契约测试通过。
+- 估时：8h。
+
+### PR-24 多端操作同步与 AI 触发调整 —— 后端
+- 前置：PR-23。做什么：per-save asyncio.Lock、seq 分配、提交后 `op_applied/city_year/phase_change/snapshot`、200 条 Last-Event-ID 缓冲、15s SSE comment 心跳、跳号全量恢复；新闻/市民触发复用，导师改为每 10 领域 op + 主动请教；简单城市码访问限流。
+- DoD：两个客户端交替/并发共 50 写操作最终一致；断线补发无重复/无遗漏；溢出与重启发全量 snapshot；无 tick 与倒计时；AI 延迟/失败不影响提交和广播；双端 seq 跳号恢复用例通过。
+- 估时：5h。
+
+### PR-25 创建/加入/分享与多端同步交互 —— 前端（本次跨栈补齐）
+- 前置：PR-23/24，3D 场景可先用最小同场景实现。做什么：Next.js App Router + TypeScript strict 首页；创建、城市码加入、localStorage 最近城市；第 N 年徽章、快进/推演/诊断/请教导师；复制城市码；op 幂等、跳号恢复、他端落格 300ms 脉冲与系统条；可反复报告及最近 20 历史；全部玩家文案使用「城市管理者」。
+- DoD：创建→建设→advance×3→project→report→关闭报告继续经营→报告回看完整可点；两浏览器同城市码互见操作，自端广播不重复；断线/跳号 toast + 全量恢复；手机宽度无横向溢出；`npm run test`、`npm run lint`、`npm run build` 通过。
+- 估时：7h。
+
+### PR-26 城市管理者术语与 SQLite 运维收尾 —— 后端
+- 前置：PR-23/24。做什么：清理倒计时、终局、市长等旧术语；`.env.example` 增加数据库与限流配置；healthz 返回存档/数据库状态；提供 SQLite 在线安全备份脚本与恢复说明；单 worker、备份、无 key 降级和比赛日全链路 checklist 更新。
+- DoD：仓库玩家可见文案无「市长」；运行文档无内存事实源/20 分钟/tick 等现行指令；备份文件可打开且内容一致；healthz、备份脚本和文档链接检查通过。
+- 估时：2h。
 
 ### PR-27 北京离线数据管线与首发数据包 —— TQYM
 - 前置：PR-01（纯数据活，与 M1 并行）。做什么：[11 §3/§4](11-real-beijing-3d.md)：tools/prepare-parcel 五步管线（裁剪→EPSG:32650 投影→栅格化→矢量导出→打包）；首发片区「朝阳 CBD–通惠河」数据包入库（parcel.json / buildings.json / network.json + LICENSE.txt 署名）。
@@ -145,7 +165,7 @@
 - 估时：5h。
 
 ### PR-29 真实片区加载与 redevelop 操作 —— 后端
-- 前置：PR-27、PR-06。做什么：[11 §5/§7](11-real-beijing-3d.md)：parcel_loader（parcel_id 二选一，sandbox 保留）；`occupied` 地形校验；redevelop 操作（拆迁成本 + 现状产出瞬时扣除 + 幸福度短期惩罚）；初始指标含既有建筑产出；契约 v1.1 字段与静态资源路由。
+- 前置：PR-27、PR-06。做什么：[11 §5/§7](11-real-beijing-3d.md)：parcel_loader（parcel_id 二选一，sandbox 保留）；`occupied` 地形校验；redevelop 操作（拆迁成本 + 现状产出瞬时扣除 + 幸福度短期惩罚）；初始指标含既有建筑产出；saves v2 字段与静态资源路由。
 - DoD：真实片区建局初始人口/岗位非零且可解释；redevelop→放置全链路黄金样例断言；沙盒模式回归通过；契约只增不改检查通过。
 - 估时：4h。
 
@@ -216,5 +236,5 @@
 | 34 | 推荐位/简化模式/撤销 | 前端 | 15·33 | M8 | 4h |
 | 35 | 推荐格与撤销端点 | 后端 | 23 | M8 | 3h |
 
-**联调点**：A = 前端 PR-05 ↔ 后端 PR-03（M1 末）；B = 前端 PR-14 ↔ 后端 PR-13（M3 末）；C = PR-16 ↔ 后端 finalize 真身（M4 末）。
+**联调点**：A = 前端 PR-05 ↔ 后端 PR-03（M1 末）；B = 前端 PR-14 ↔ 后端 PR-13（M3 末）；C = PR-16 ↔ saves v2 project/report（M4 末）。
 **铁律**（[README](README.md)）：AI 只做叙述；前后端只按 [02](02-data-contract.md) 通信；DoD 即验收；模型自选但必须 OpenAI 兼容抽象。

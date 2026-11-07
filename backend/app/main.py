@@ -1,19 +1,19 @@
-"""FastAPI 入口：挂路由、中间件、异常处理器（06 §2），规划导师 90s 调度（04 §4）。"""
+"""CITY20 saves v2 FastAPI 入口。"""
 
-import asyncio
-import contextlib
-import logging
+import time
+from collections import defaultdict, deque
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
-from app.api.playback import ensure_playback
-from app.api.sessions import get_registry, narrator
-from app.api.sessions import router as sessions_router
-from app.api.stream import sse_endpoint
+from app.api.saves import get_service
+from app.api.saves import router as saves_router
 from app.config import Settings
 from app.contracts.errors import (
     HTTP_STATUS_BY_CODE,
@@ -23,61 +23,72 @@ from app.contracts.errors import (
 )
 from app.core.errors import GameError
 
-log = logging.getLogger(__name__)
 settings = Settings()
-
-MENTOR_POLL_SEC = 5.0  # 调度循环粒度；90s 节流在 Narrator.mentor_comment
-
-
-async def _mentor_loop() -> None:
-    """规划导师定时点评：遍历活跃会话，90s 一条（core 不依赖 narrate，故放入口层）。"""
-    while True:
-        await asyncio.sleep(MENTOR_POLL_SEC)
-        for session in get_registry().active_sessions():
-            try:
-                if session.finalized:
-                    ensure_playback(session, narrator)  # polish 超时自动 finalize 的播放兜底
-                else:
-                    await narrator.mentor_comment(session)
-            except Exception:  # 单会话失败不影响其他会话
-                log.exception("mentor comment failed: %s", session.session_id)
+_rate_windows: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    task = asyncio.create_task(_mentor_loop())
+    _rate_windows.clear()
+    await get_service().initialize()
     try:
         yield
     finally:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-        get_registry().close()
+        await get_service().close()
 
 
 app = FastAPI(title="CITY20 Backend", version=settings.app_version, lifespan=lifespan)
-app.include_router(sessions_router)
-app.add_api_route(
-    "/api/sessions/{session_id}/stream",
-    sse_endpoint,
-    methods=["GET"],
-    name="session_stream",
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+app.include_router(saves_router)
+app.mount(
+    "/static/parcels",
+    StaticFiles(directory=Path(settings.parcel_data_dir), check_dir=False),
+    name="parcels",
+)
+
+
+@app.middleware("http")
+async def city_code_rate_limit(request: Request, call_next):
+    """按 IP + 城市码限流，降低 8 位城市码枚举与写放大风险。"""
+    if not request.url.path.startswith("/api/saves"):
+        return await call_next(request)
+    parts = request.url.path.split("/")
+    scope = parts[3].upper() if len(parts) > 3 and parts[3] else "create"
+    key = (request.client.host if request.client else "unknown", scope)
+    now = time.monotonic()
+    window = _rate_windows[key]
+    while window and now - window[0] >= 60:
+        window.popleft()
+    if len(window) >= settings.rate_limit_per_minute:
+        envelope = ErrorEnvelope(
+            error=ErrorBody(
+                code=ErrorCode.INVALID_PAYLOAD,
+                message="请求过于频繁，请稍后重试",
+                details={"reason": "rate_limited"},
+            )
+        )
+        return JSONResponse(status_code=429, content=envelope.model_dump(mode="json"))
+    window.append(now)
+    return await call_next(request)
 
 
 @app.exception_handler(GameError)
 async def game_error_handler(_: Request, exc: GameError) -> JSONResponse:
-    """领域错误 → 02 §1 统一信封。"""
     envelope = ErrorEnvelope(
         error=ErrorBody(code=exc.code, message=exc.message, details=exc.details)
     )
-    return JSONResponse(status_code=HTTP_STATUS_BY_CODE[exc.code], content=envelope.model_dump())
+    return JSONResponse(
+        status_code=HTTP_STATUS_BY_CODE[exc.code], content=envelope.model_dump(mode="json")
+    )
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
-    """请求体缺字段/类型错 → 422 invalid_payload（02 §1）。"""
-    # 手工提取可 JSON 序列化的字段（不同 FastAPI 版本 errors() 参数签名不同，避免耦合）
     simple_errors = [
         {
             "loc": [str(part) for part in e.get("loc", ())],
@@ -93,10 +104,15 @@ async def validation_error_handler(_: Request, exc: RequestValidationError) -> J
             details={"errors": simple_errors},
         )
     )
-    return JSONResponse(status_code=422, content=envelope.model_dump())
+    return JSONResponse(status_code=422, content=envelope.model_dump(mode="json"))
 
 
 @app.get("/healthz")
 async def healthz() -> dict[str, object]:
-    """进程存活探活（06 §7）：存活 + 会话数 + 配置摘要（脱敏）。"""
-    return {"status": "ok", "version": settings.app_version, "sessions": get_registry().count()}
+    database = await get_service().repository.health()
+    return {
+        "status": "ok",
+        "version": settings.app_version,
+        "saves": database["saves"],
+        "database": database,
+    }

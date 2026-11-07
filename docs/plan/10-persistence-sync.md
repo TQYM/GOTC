@@ -1,7 +1,7 @@
 # 10 · 不限时经营 · 持久化存档 · 多端同步（v2 变更专题）
 
 > 本文档覆盖此前规划的三处根本决策：**取消一切现实时间限制**、**城市即长期存档（SQLite 持久化）**、**多端实时同步同一存档**。玩家身份统一称为「**城市管理者**」（不再用「市长」）。
-> 优先级：本文与旧文档冲突处**一律以本文为准**。旧文档仅作背景，变更对照见 §1。新增 PR-23~26（见 [08](08-pr-tasks.md)），里程碑 M7。
+> 本文说明设计决策；接口字段、端点与事件以 [02](02-data-contract.md) saves v2 为唯一契约。旧文档仅作背景，变更对照见 §1。PR-23~26 正式任务卡见 [08](08-pr-tasks.md)，里程碑 M7。
 
 ## 1. 变更对照表（旧文档 → 本文）
 
@@ -26,16 +26,16 @@
 - `project`：以当前状态为基底复制推演 N 年（默认 10）——**只读预览不写回**，返回年度切片供 ProjectionPlayer 播放；播放期间允许继续建设（预览标注「基于第 N 年快照」）。
 - `report`：任意时点生成诊断报告（五维评分 + 体检标签 + report_text），可反复，历史留存最近 20 份。
 
-**阶段 4 态**（全部玩家主动流转，后端不再有任何倒计时）：
+**持久化阶段 2 态 + 本地 UI 2 态**（不再有任何倒计时）：
 
-| 阶段 | 含义 | 出口 |
-|---|---|---|
-| briefing | 查看地块与目标 | 点「开始规划」→ building |
-| building | 自由经营（放置/拆除/advance/project/report 全可用） | 常驻态 |
-| projecting | 推演切片计算与播放中 | 播放结束/取消 → building |
-| report | 报告展示 | 关闭 → building |
+| 状态 | 是否写入 Save.phase | 含义 | 出口 |
+|---|---|---|---|
+| briefing | 是 | 查看地块与目标 | 点「开始规划」→ building |
+| building | 是 | 自由经营（place/remove/redevelop/advance/project/report/mentor） | 常驻态 |
+| projecting | 否，各端独立 | 基于某 base_seq 的只读预览播放；他端可继续建设 | 播放结束/取消 → 本地 building 视图 |
+| report | 否，各端独立 | 当前报告展示与历史回看；他端可继续建设 | 关闭 → 本地 building 视图 |
 
-删除：build 15min / polish 2min / locked 40s 全部时限；polish 阶段概念取消（无限时即无「最后微调」）；前端倒计时组件移除，改为常驻「第 N 年」徽章。
+这样避免一台设备看报告时阻塞另一台设备，也避免把可随时取消的 UI 状态写入共享存档。删除 build 15min / polish 2min / locked 40s 全部时限；前端倒计时组件改为常驻「第 N 年」徽章。
 
 ## 4. 持久化与事件溯源（PR-23）
 
@@ -43,10 +43,12 @@
 
 | 表 | 关键字段 | 说明 |
 |---|---|---|
-| saves | save_id、city_code、name、seed、city_year、phase、created_at、updated_at | 城市元信息 |
-| ops | save_id、seq（存档内单调递增）、op_type（place/remove/advance）、payload、client_op_id、created_at | 操作日志，事件溯源本体 |
-| snapshots | save_id、seq、state_json | 每 50 个 op 打一次快照（tiles+metrics+city_year+phase） |
-| reports | save_id、created_at、payload_json | 报告历史，保留最近 20 份 |
+| saves | save_id、city_code、name、seed、city_year、phase、last_seq、parcel_id、data_version、sim_config_json、created_at、updated_at | 城市元信息、规则与数据版本 |
+| ops | save_id、seq（存档内单调递增）、op_type（place/remove/redevelop/advance）、payload、result_json、client_op_id、created_at | 操作日志与幂等首次响应 |
+| snapshots | save_id、seq、state_json | 每 50 个 op 打一次完整状态快照 |
+| reports | save_id、report_id、created_at、payload_json | 报告历史，保留最近 20 份 |
+
+完整快照范围见 [02 §6](02-data-contract.md#6-持久化最小状态)，包括实际入住、环境/森林状态、redevelop 惩罚、规则和数据版本；不能只存 tiles/metrics/year/phase。
 
 - **载入 = 最近快照 + 重放增量 ops**。确定性 sim（[03](03-sim-engine.md)）保证重放结果与在线逐次计算逐字段一致——这是 PR-23 的核心验收。
 - **city_code**：8 位 Crockford Base32（去除易混淆字符），唯一索引。知道城市码即可共同经营——**分享即协作是特性**；后端对 REST 做简单速率限制防枚举。
@@ -55,34 +57,9 @@
 
 ## 5. API v2（替换 02 的 REST 与 SSE 表）
 
-REST（错误协议 9 码不变；`session_not_found` 语义改为城市码不存在）：
+REST 完整请求/响应、7 错误码及字段见 [02 §1/§3](02-data-contract.md)。端点包括：create/get/start、place/remove/redevelop/advance、project、report/reports、mentor、events。写操作统一使用 `type/anchor` 或 `tile_id/anchor` 加 `client_op_id/base_seq`，不再混用 `block/anchor_r/anchor_c`。
 
-| 端点 | 说明 | 成功返回 |
-|---|---|---|
-| POST /api/saves | 建城 `{seed?, name?}` | save_id、city_code、parcel、tiles、metrics、city_year=1、phase=briefing |
-| GET /api/saves/{city_code} | 全量恢复（断线/换端/刷新） | parcel、tiles、metrics、city_year、phase、last_seq |
-| POST /api/saves/{city_code}/place | 放置 `{block, anchor_r, anchor_c, client_op_id, base_seq}` | seq、tiles、metrics、metrics_diff |
-| POST /api/saves/{city_code}/remove | 拆除（同上形状） | 同上 |
-| POST /api/saves/{city_code}/advance | 快进一年（写回） | seq、city_year、metrics、metrics_diff、年度事件列表 |
-| POST /api/saves/{city_code}/project | 未来推演 `{years=10}`（不写回） | projection 年度切片、base_year |
-| POST /api/saves/{city_code}/report | 生成诊断（可反复） | scores、ending、report_text、created_at |
-| GET /api/saves/{city_code}/reports | 报告历史（≤20 份） | 报告列表 |
-| GET /api/saves/{city_code}/events | SSE 订阅 | 见下表 |
-
-原 `restart` 删除（重开 = 新建存档）；原 `finalize` 由 `project` + `report` 取代。
-
-SSE 事件表（v2）：
-
-| 事件 | data 要点 | 说明 |
-|---|---|---|
-| op_applied | seq、op_type、payload、metrics_diff、来源端标记 | **多端同步核心**：其他端操作实时广播 |
-| city_year | city_year、metrics_diff、年度事件 | advance 后广播 |
-| phase_change | phase、city_year | briefing→building 等 |
-| news / citizen / mentor | 同 v1 | AI 叙述层不变 |
-| projection_step | 年度切片 | project 计算时逐年推送 |
-| report_ready | 报告 payload | report 完成 |
-| error | 错误信封 | 同 v1 |
-| ~~tick~~ | — | **删除**（无倒计时） |
+原 `restart` 删除（重开 = 新建存档）；原 `finalize` 由只读 `project` + 可随时 `report` 取代。SSE 完整事件形状见 [02 §4](02-data-contract.md)：新增 `snapshot/op_applied/city_year`，保留 phase/news/citizen/mentor/projection/report/error，删除 tick；op seq 与 SSE id 分离。
 
 ## 6. 多端同步协议（PR-24）
 
