@@ -1,19 +1,23 @@
 """会话注册表（06 §3）：内存 dict + 过期清理，单进程单实例。"""
 
+import asyncio
 import secrets
 import time
 
 from app.config import SimConfig
 from app.core.session import GameSession
+from app.core.timer import start_timer
 from app.sim.generator import generate_parcel
 
 SESSION_TTL_SEC = 40 * 60  # 创建后 40 分钟无操作清除（06 §3）
 
 
 class SessionRegistry:
-    def __init__(self, config: SimConfig) -> None:
+    def __init__(self, config: SimConfig, enable_timer: bool = True) -> None:
         self._config = config
         self._sessions: dict[str, GameSession] = {}
+        self._tasks: dict[str, asyncio.Task] = {}
+        self._enable_timer = enable_timer
 
     def create(self, seed: int | None = None) -> GameSession:
         if seed is None:
@@ -25,6 +29,10 @@ class SessionRegistry:
             config=self._config,
         )
         self._sessions[session.session_id] = session
+        if self._enable_timer:
+            task = start_timer(session)
+            if task is not None:
+                self._tasks[session.session_id] = task
         return session
 
     def get(self, session_id: str) -> GameSession | None:
@@ -42,7 +50,19 @@ class SessionRegistry:
             if now - s.last_active > SESSION_TTL_SEC
         ]
         for sid in dead:
+            self._sessions[sid].closed = True
+            task = self._tasks.pop(sid, None)
+            if task is not None:
+                task.cancel()
             del self._sessions[sid]
+
+    def close(self) -> None:
+        """取消全部计时任务（测试/进程退出）。"""
+        for task in self._tasks.values():
+            task.cancel()
+        self._tasks.clear()
+        for session in self._sessions.values():
+            session.closed = True
 
     def count(self) -> int:
         self._sweep()
