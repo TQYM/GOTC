@@ -39,6 +39,8 @@
 
 前端页面、三角色信息流 UI 和生产级 SSE 网关仍按 [PR 任务卡](docs/plan/08-pr-tasks.md) 推进。当前 SSE 路由提供联调桩流，尚未接入环形缓冲、心跳和断点补发。`docs/plan/` 是唯一执行依据。
 
+数值平衡的前置修正、参数扫描和五种策略验收标准见 [12 · 数值平衡执行方案](docs/plan/12-balance-plan.md)。
+
 最近的规划与契约对齐见提交 [`ea77888`](https://github.com/TQYM/GOTC/commit/ea77888)。
 
 ## 快速开始

@@ -18,6 +18,7 @@
 | [09-cross-platform.md](09-cross-platform.md) | 四端适配：Capacitor / Tauri 壳、触屏交互、打包分发 | 前端 |
 | [10-persistence-sync.md](10-persistence-sync.md) | 不限时 / SQLite 存档 / 多端同步 / 玩家=城市管理者 | 后端为主 |
 | [11-real-beijing-3d.md](11-real-beijing-3d.md) | **真实北京 GIS 数据 + 真 3D 渲染**（最新重大变更，优先读） | 前后端所有人 |
+| [12-balance-plan.md](12-balance-plan.md) | 数值平衡：前置规则、参数扫描、策略样本与验收门槛 | sim/后端/交付 |
 
 ## 铁律（所有 PR 必须遵守）
 
