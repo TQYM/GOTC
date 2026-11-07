@@ -12,7 +12,7 @@
 |---|---|---|
 | TQYM | [@TQYM](https://github.com/TQYM) | 项目负责 / 架构 / 规划文档 |
 | IGNG | [@IGNGserver](https://github.com/IGNGserver) | **后端全部**：sim 引擎 / AI 编排 / SSE / 契约模型 |
-| 灰灰 | [@HuiHuiya](https://github.com/HuiHuiya) | **前端全部**：3D 沙盘 / 拖拽交互 / 信息流 / 报告页 |
+| 灰灰 | [@huihiya](https://github.com/huihiya) | **前端全部**：3D 沙盘 / 拖拽交互 / 信息流 / 报告页 |
 
 ## 仓库结构
 
@@ -97,7 +97,7 @@ pytest -q
 
 ## 协作规范
 
-提交与分支规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。`main` 分支受保护：普通变更需 PR + 1 人审查；**IGNGserver 与 HuiHuiya 免审直通**（已配置仓库规则集）。
+提交与分支规范见 [CONTRIBUTING.md](CONTRIBUTING.md)。`main` 分支受保护：普通变更需 PR + 1 人审查；**IGNGserver 与 huihiya 免审直通**（已配置仓库规则集）。
 
 ## 许可证
 

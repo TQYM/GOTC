@@ -39,7 +39,7 @@ docs: 更新 AI 三脑 prompt 设计
 | 成员 | 权限 |
 |---|---|
 | @IGNGserver | push `main` / PR 免审合并 |
-| @HuiHuiya | push `main` / PR 免审合并 |
+| @huihiya | push `main` / PR 免审合并 |
 | @TQYM（仓库管理员） | 同上 + 规则集管理 |
 
 其余协作者（含后续加入者）提 PR 需 1 人审查。

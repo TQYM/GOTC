@@ -38,7 +38,7 @@ CITY20：AI 驱动的城市更新模拟沙盘，**不限时**。玩家以城市�
 ## 协作
 
 - 分支用 `feat/xxx`、`fix/xxx`、`chore/xxx`，当天合并当天删；PR 标题遵守 Conventional Commits。
-- `main` 受仓库规则集保护：普通协作者需 PR + 1 人审查；IGNGserver 与 HuiHuiya 免审直通（见 `CONTRIBUTING.md`）。**免审直通不等于免 CI。**
+- `main` 受仓库规则集保护：普通协作者需 PR + 1 人审查；IGNGserver 与 huihiya 免审直通（见 `CONTRIBUTING.md`）。**免审直通不等于免 CI。**
 - 提交信息与 PR 描述按 `CONTRIBUTING.md`；「测试了什么」一栏不许写「没测」，没时间测就写清风险点。
 - 密钥/Token 只进 `.env`（已在 `.gitignore`），仓库只保留 `.env.example`；发现误提交立即报告并轮换。
 
