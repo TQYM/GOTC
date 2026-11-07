@@ -9,6 +9,7 @@ import type {
   SessionCreated,
   SessionState,
 } from "@/lib/contract";
+import { openEventStream } from "@/lib/sse";
 import { request } from "./http";
 import {
   toGamePhase,
@@ -90,8 +91,7 @@ export const sessionsV1: CityApi = {
     throw new UnsupportedError("返回建设");
   },
 
-  // SSE 信息流在 PR-14 接入
-  subscribe() {
-    return () => {};
+  subscribe(id, handlers) {
+    return openEventStream(`${base(id)}/stream`, handlers);
   },
 };

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 /**
- * 游戏页主体（05 §2.2）：左指标 · 中 3D 沙盘（底部工具栏）· 右信息流（PR-14）。
+ * 游戏页主体（05 §2.2）：左指标 · 中 3D 沙盘（底部工具栏）· 右 AI 信息流。
  * 放置交互（05 §3.1 / 13 §4.3）：选中卡牌进入放置模式 → 幽灵预览（合法绿 / 非法红）→ 左键落子，
  * 保持放置模式可连续放置；右键单击 / ESC 逐级退出。卡牌也可直接拖到沙盘上落子。
  */
@@ -23,6 +23,7 @@ import type { CityApi } from "@/lib/api";
 import { SCENE_COLORS } from "@/lib/palette";
 import { checkPlacement } from "@/lib/validate";
 import { occupiedSet, tileAt, useGame } from "@/store/game";
+import InfoFeed from "./InfoFeed";
 import MetricsPanel from "./MetricsPanel";
 import RemoveConfirm from "./RemoveConfirm";
 import Toasts from "./Toasts";
@@ -48,6 +49,7 @@ export default function GameView({
 }) {
   const init = useGame((s) => s.init);
   const status = useGame((s) => s.status);
+  const connect = useGame((s) => s.connect);
   const loadError = useGame((s) => s.loadError);
   const parcel = useGame((s) => s.parcel);
   const tiles = useGame((s) => s.tiles);
@@ -70,6 +72,12 @@ export default function GameView({
   useEffect(() => {
     void init(api, id);
   }, [api, id, init]);
+
+  // 推送订阅：加载完成后建立，路由切换/卸载时断开（PR-14）
+  useEffect(() => {
+    if (status !== "ready") return;
+    return connect();
+  }, [status, connect]);
 
   // E2E 调试钩子：?debug=1 时暴露 store 供自动化测试读取
   useEffect(() => {
@@ -259,6 +267,10 @@ export default function GameView({
           </div>
           <RemoveConfirm />
         </section>
+
+        <aside className="order-3 h-[50vh] w-full shrink-0 lg:h-auto lg:w-80">
+          <InfoFeed />
+        </aside>
       </main>
       <DragOverlay dropAnimation={null} style={{ pointerEvents: "none" }}>
         {dragType ? (

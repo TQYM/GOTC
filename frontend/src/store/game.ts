@@ -17,9 +17,13 @@ import type {
 } from "@/lib/contract";
 import {
   ApiError,
+  toGamePhase,
   type CityApi,
   type CitySnapshot,
+  type ConnState,
   type GamePhase,
+  type StreamEvent,
+  type StreamEventMap,
 } from "@/lib/api";
 import { humanizeError, yuan } from "@/lib/api/humanize";
 import { TILE_SPECS } from "@/lib/catalog";
@@ -35,6 +39,15 @@ export interface Toast {
   hint?: string;
   retry?: () => void;
 }
+
+/** 信息流条目（05 §2.3 InfoFeed）：三角色 + 系统提示 */
+export type FeedItem =
+  | { key: string; kind: "news"; data: StreamEventMap["news"] }
+  | { key: string; kind: "citizen"; data: StreamEventMap["citizen"] }
+  | { key: string; kind: "mentor"; data: StreamEventMap["mentor"] }
+  | { key: string; kind: "system"; text: string };
+
+const FEED_LIMIT = 200;
 
 export interface RemoveRequest {
   tile: Tile;
@@ -57,8 +70,16 @@ interface GameState {
   busy: boolean;
   toasts: Toast[];
   confirmRemove: RemoveRequest | null;
+  feed: FeedItem[];
+  conn: ConnState;
+  /** 断线开始时间（ms），用于「超过 30s 提示刷新」 */
+  downSince: number | null;
 
   init(api: CityApi, id: string): Promise<void>;
+  /** 订阅推送；返回退订函数（由页面 effect 管理生命周期） */
+  connect(): () => void;
+  applyEvent(e: StreamEvent): void;
+  resync(): Promise<void>;
   applySnapshot(s: CitySnapshot): void;
   setTool(t: Tool): void;
   exitTool(): void;
@@ -141,6 +162,9 @@ export const useGame = create<GameState>()((set, get) => {
     busy: false,
     toasts: [],
     confirmRemove: null,
+    feed: [],
+    conn: "connecting",
+    downSince: null,
 
     async init(api, id) {
       set({
@@ -150,6 +174,7 @@ export const useGame = create<GameState>()((set, get) => {
         loadError: null,
         tool: { kind: "select" },
         confirmRemove: null,
+        feed: [],
       });
       try {
         get().applySnapshot(await api.load(id));
@@ -157,6 +182,78 @@ export const useGame = create<GameState>()((set, get) => {
       } catch (e) {
         const msg = e instanceof ApiError ? humanizeError(e).title : "加载失败";
         set({ status: "error", loadError: msg });
+      }
+    },
+
+    connect() {
+      const { api, id } = get();
+      if (!api || !id) return () => {};
+      let wasDown = false;
+      return api.subscribe(id, {
+        onEvent: (e) => get().applyEvent(e),
+        onConn: (conn, downSince) => {
+          set({ conn, downSince });
+          if (conn === "down") wasDown = true;
+          if (conn === "open" && wasDown) {
+            // 重连成功：后端已按 Last-Event-ID 补发；再拉一次全量兜底（05 §3.3）
+            wasDown = false;
+            void get().resync();
+          }
+        },
+      });
+    },
+
+    async resync() {
+      const { api, id } = get();
+      if (!api || !id) return;
+      try {
+        get().applySnapshot(await api.load(id));
+      } catch {
+        /* 全量恢复失败不打扰玩家，下次重连再试 */
+      }
+    },
+
+    applyEvent(e) {
+      switch (e.event) {
+        case "tick": {
+          const d = e.data;
+          const cur = get().metrics;
+          const changed = Object.keys(d.delta).length > 0;
+          if (d.after) {
+            if (changed) applyMetrics(d.after);
+            else set({ metrics: d.after });
+          } else if (cur && changed) {
+            const next = { ...cur } as unknown as Record<string, number>;
+            for (const [k, v] of Object.entries(d.delta))
+              next[k] += v as number;
+            applyMetrics(next as unknown as Metrics);
+          }
+          set({ cityYear: d.at_year });
+          return;
+        }
+        case "phase_change":
+          set({ phase: toGamePhase(e.data.phase) });
+          return;
+        case "news":
+        case "citizen":
+        case "mentor": {
+          const key = `${e.id ?? "x"}:${e.event}`;
+          if (get().feed.some((f) => f.key === key)) return; // 补发去重
+          const item = { key, kind: e.event, data: e.data } as FeedItem;
+          set((s) => ({ feed: [...s.feed, item].slice(-FEED_LIMIT) }));
+          return;
+        }
+        case "error": {
+          const item: FeedItem = {
+            key: `${e.id ?? Date.now()}:error`,
+            kind: "system",
+            text: e.data.message,
+          };
+          set((s) => ({ feed: [...s.feed, item].slice(-FEED_LIMIT) }));
+          return;
+        }
+        default:
+          return; // projection_step / report_ready / city_year 由 PR-15/16 消费
       }
     },
 
