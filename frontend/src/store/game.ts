@@ -9,7 +9,11 @@
 import { create } from "zustand";
 import type {
   Cell,
+  Ending,
   Metrics,
+  ProjectionYear,
+  Report,
+  Scores,
   MetricKey,
   Parcel,
   Tile,
@@ -49,6 +53,14 @@ export type FeedItem =
 
 const FEED_LIMIT = 200;
 
+/** 城市诊断结果（随时生成，10 §3） */
+export interface CityReport {
+  scores: Scores;
+  ending: Ending;
+  report: Report;
+  cityName: string | null;
+}
+
 export interface RemoveRequest {
   tile: Tile;
   refund: number;
@@ -71,6 +83,13 @@ interface GameState {
   toasts: Toast[];
   confirmRemove: RemoveRequest | null;
   feed: FeedItem[];
+  /** 完整推演切片（后端预计算）与已播放到的年份 */
+  projection: ProjectionYear[];
+  projectionYear: number;
+  cityReport: CityReport | null;
+  /** 已应用的最大推送 id：阶段类事件按 id 单调前进，乱序/重放的旧事件被忽略 */
+  phaseEventId: number;
+  lastEventId: number;
   conn: ConnState;
   /** 断线开始时间（ms），用于「超过 30s 提示刷新」 */
   downSince: number | null;
@@ -80,6 +99,12 @@ interface GameState {
   connect(): () => void;
   applyEvent(e: StreamEvent): void;
   resync(): Promise<void>;
+  /** 后端确认的阶段迁移（REST 响应或推送），本地不做乐观迁移 */
+  setPhase(p: GamePhase, eventId?: number | null): void;
+  advanceYear(): Promise<void>;
+  project(): Promise<void>;
+  makeReport(): Promise<void>;
+  backToBuilding(): Promise<void>;
   applySnapshot(s: CitySnapshot): void;
   setTool(t: Tool): void;
   exitTool(): void;
@@ -163,6 +188,11 @@ export const useGame = create<GameState>()((set, get) => {
     toasts: [],
     confirmRemove: null,
     feed: [],
+    projection: [],
+    projectionYear: 0,
+    cityReport: null,
+    phaseEventId: -1,
+    lastEventId: -1,
     conn: "connecting",
     downSince: null,
 
@@ -175,6 +205,8 @@ export const useGame = create<GameState>()((set, get) => {
         tool: { kind: "select" },
         confirmRemove: null,
         feed: [],
+        phaseEventId: -1,
+        lastEventId: -1,
       });
       try {
         get().applySnapshot(await api.load(id));
@@ -213,7 +245,24 @@ export const useGame = create<GameState>()((set, get) => {
       }
     },
 
+    setPhase(p, eventId) {
+      const s = get();
+      if (eventId !== undefined && eventId !== null) {
+        if (eventId < s.phaseEventId) return; // 乱序到达的旧阶段事件：不回退
+        set({ phase: p, phaseEventId: eventId });
+      } else {
+        // REST 响应：以已见过的最新事件 id 为基线，之后补发的旧阶段事件不会覆盖它
+        set({
+          phase: p,
+          phaseEventId: Math.max(s.phaseEventId, s.lastEventId),
+        });
+      }
+      if (p !== "building" && get().tool.kind !== "select")
+        set({ tool: { kind: "select" }, confirmRemove: null });
+    },
+
     applyEvent(e) {
+      if (e.id !== null && e.id > get().lastEventId) set({ lastEventId: e.id });
       switch (e.event) {
         case "tick": {
           const d = e.data;
@@ -232,8 +281,29 @@ export const useGame = create<GameState>()((set, get) => {
           return;
         }
         case "phase_change":
-          set({ phase: toGamePhase(e.data.phase) });
+          get().setPhase(toGamePhase(e.data.phase), e.id);
           return;
+        case "city_year":
+          if (e.data.city_year >= get().cityYear)
+            set({ cityYear: e.data.city_year });
+          return;
+        case "projection_step":
+          // 只前进不重播：已播放过的年份（含断线补发）直接忽略
+          if (e.data.year > get().projectionYear)
+            set({ projectionYear: e.data.year });
+          return;
+        case "report_ready": {
+          const cur = get().cityReport;
+          if (cur)
+            set({
+              cityReport: {
+                ...cur,
+                report: e.data.report,
+                cityName: e.data.city_name,
+              },
+            });
+          return;
+        }
         case "news":
         case "citizen":
         case "mentor": {
@@ -253,7 +323,7 @@ export const useGame = create<GameState>()((set, get) => {
           return;
         }
         default:
-          return; // projection_step / report_ready / city_year 由 PR-15/16 消费
+          return;
       }
     },
 
@@ -264,6 +334,17 @@ export const useGame = create<GameState>()((set, get) => {
         metrics: s.metrics,
         phase: s.phase,
         cityYear: s.cityYear,
+        projection: s.projection,
+        projectionYear: s.projectionPublishedYear,
+        cityReport:
+          s.scores && s.ending && s.report
+            ? {
+                scores: s.scores,
+                ending: s.ending,
+                report: s.report,
+                cityName: s.cityName,
+              }
+            : null,
       });
     },
 
@@ -285,9 +366,88 @@ export const useGame = create<GameState>()((set, get) => {
       set({ busy: true });
       try {
         const r = await api.startPlanning(id);
-        set({ phase: r.phase });
+        get().setPhase(r.phase);
       } catch (e) {
         fail(e, null, () => void get().startPlanning());
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    async advanceYear() {
+      const { api, id, busy, phase } = get();
+      if (!api || !id || busy || phase !== "building") return;
+      set({ busy: true });
+      try {
+        const r = await api.advanceYear(id);
+        applyMetrics(r.metrics);
+        // 年份只信后端：取响应值，不在本地 +1
+        set({ cityYear: Math.max(get().cityYear, r.cityYear) });
+        get().setPhase(r.phase);
+        get().toast({ tone: "ok", title: `进入第 ${r.cityYear} 年` });
+      } catch (e) {
+        fail(e, null, () => void get().advanceYear());
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    async project() {
+      const { api, id, busy, phase } = get();
+      if (!api || !id || busy || phase !== "building") return;
+      set({ busy: true });
+      try {
+        const r = await api.project(id);
+        set({ projection: r.projection, projectionYear: 0 });
+        if (r.final) {
+          set({
+            cityReport: {
+              scores: r.final.scores,
+              ending: r.final.ending,
+              report: r.final.report,
+              cityName: r.final.city_name,
+            },
+          });
+        }
+        get().setPhase(r.phase);
+      } catch (e) {
+        fail(e, null, () => void get().project());
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    async makeReport() {
+      const { api, id, busy, phase } = get();
+      if (!api || !id || busy || phase !== "building") return;
+      set({ busy: true });
+      try {
+        const r = await api.report(id);
+        set({
+          cityReport: {
+            scores: r.scores,
+            ending: r.ending,
+            report: r.report,
+            cityName: r.cityName,
+          },
+        });
+        get().setPhase(r.phase);
+      } catch (e) {
+        fail(e, null, () => void get().makeReport());
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    async backToBuilding() {
+      const { api, id, busy } = get();
+      if (!api || !id || busy) return;
+      set({ busy: true });
+      try {
+        const r = await api.backToBuilding(id);
+        get().setPhase(r.phase);
+      } catch (e) {
+        fail(e);
       } finally {
         set({ busy: false });
       }

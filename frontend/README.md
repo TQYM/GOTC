@@ -28,8 +28,8 @@ npm run build        # 生产构建（CI 强制）
 ```
 src/
 ├── app/                        # 路由：/（落地页 + 创建新城）、/game?session=（游戏页）、/sandbox（渲染预览）
-├── components/game/            # GameView（三栏布局 + 放置交互）、ToolBar、MetricsPanel、Toasts、RemoveConfirm
-├── store/game.ts               # Zustand 会话 store（05 §2.4）：阶段只信后端，失败零变更
+├── components/game/            # GameView（三栏布局 + 放置交互）、ToolBar、MetricsPanel、InfoFeed、PhaseBanner、ReportSummary、Toasts、RemoveConfirm
+├── store/game.ts               # Zustand 会话 store（05 §2.4）：不限时 4 态只信后端（乱序旧事件不回退），失败零变更
 ├── components/scene/
 │   ├── CityScene3D.tsx         # 场景入口：相机、光照/阴影、分层、性能探针
 │   ├── CameraRig.tsx           # 天际线式相机操控（13 §4.1）：右键旋转、中键/WASD 平移、滚轮向光标缩放、Home 复位
@@ -40,6 +40,7 @@ src/
 │   └── toon.ts                 # MeshToonMaterial + 3 阶 gradientMap
 └── lib/
     ├── api/                    # CityApi 抽象：sessionsV1（当前后端）/ mockApi（离线）+ 错误人话化
+    ├── sse.ts                  # fetch 流式 SSE：断线每 2s 重连 + Last-Event-ID
     ├── validate.ts             # 本地放置预校验（地形 + 占用 + 资金缓存，仅体验层）
     ├── contract.ts             # 02 契约 TS 镜像（v1 正文 + 11 §7 v1.1 扩展）
     ├── contractV2.ts           # 10 §5 API v2 预备类型（02 升版后对齐）

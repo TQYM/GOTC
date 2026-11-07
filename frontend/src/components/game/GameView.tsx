@@ -25,6 +25,8 @@ import { checkPlacement } from "@/lib/validate";
 import { occupiedSet, tileAt, useGame } from "@/store/game";
 import InfoFeed from "./InfoFeed";
 import MetricsPanel from "./MetricsPanel";
+import PhaseBanner from "./PhaseBanner";
+import ReportSummary from "./ReportSummary";
 import RemoveConfirm from "./RemoveConfirm";
 import Toasts from "./Toasts";
 import ToolBar, { TileCardFace } from "./ToolBar";
@@ -219,23 +221,26 @@ export default function GameView({
 
             {tool.kind === "place" && check && !check.ok && (
               <div
-                className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md bg-red-600/90 px-3 py-1 text-sm text-white"
+                className="pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 rounded-md bg-red-600/90 px-3 py-1 text-sm text-white"
                 data-testid="invalid-reason"
               >
                 {check.reason}
               </div>
             )}
             {tool.kind === "place" && check?.ok && check.warning && (
-              <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded-md bg-amber-500/90 px-3 py-1 text-sm text-black">
+              <div className="pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 rounded-md bg-amber-500/90 px-3 py-1 text-sm text-black">
                 {check.warning}
               </div>
             )}
             {tool.kind !== "select" && (
-              <div className="pointer-events-none absolute right-3 top-3 rounded bg-black/50 px-2 py-1 text-xs text-white">
+              <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-black/50 px-2 py-1 text-xs text-white">
                 {tool.kind === "remove" ? "拆除模式" : "放置模式"} · 右键 / ESC
                 退出
               </div>
             )}
+
+            {parcel && <PhaseBanner />}
+            <ReportSummary />
 
             {phase === "briefing" && parcel && (
               <div className="absolute inset-0 z-20 grid place-items-center bg-black/30 p-4">

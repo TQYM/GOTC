@@ -39,6 +39,8 @@ interface MockCity {
   nextEventId: number;
   events: StreamEvent[];
   projection: ProjectionYear[];
+  /** 推演已推送到的年份（刷新后从这里续播） */
+  projectionPublished: number;
   scores: Scores | null;
   ending: Ending | null;
   report: Report | null;
@@ -47,6 +49,12 @@ interface MockCity {
 const KEY = (id: string) => `city20.mock.${id}`;
 const parcel: Parcel = MOCK_SESSION.parcel;
 const subscribers = new Map<string, Set<StreamHandlers>>();
+
+/** phase_change 载荷：v1 契约仍要求 time_left_sec 字段，mock 固定填 0，前端从不读取 */
+const phaseData = (phase: "build" | "locked" | "report") => ({
+  phase,
+  time_left_sec: 0,
+});
 
 const CAPACITY: Partial<Record<Tile["type"], number>> = {
   res_low: 300,
@@ -214,9 +222,7 @@ function snapshot(c: MockCity): CitySnapshot {
     phase: c.phase,
     cityYear: c.cityYear,
     projection: c.projection,
-    projectionPublishedYear: c.projection.length
-      ? c.projection[c.projection.length - 1].year
-      : 0,
+    projectionPublishedYear: c.projectionPublished,
     scores: c.scores,
     ending: c.ending,
     report: c.report,
@@ -297,6 +303,38 @@ function afterOp(
   }
 }
 
+const playing = new Set<string>();
+
+/** 推演播放：逐年推送 projection_step，结束后回到建设（10 §3：只读预览，不写回）。
+ *  页面刷新后由 subscribe 续播剩余年份。 */
+function schedulePlayback(id: string) {
+  if (playing.has(id)) return;
+  playing.add(id);
+  const tickOnce = () => {
+    const cur = load(id);
+    if (cur.phase !== "projecting") {
+      playing.delete(id);
+      return;
+    }
+    const next = cur.projection.find((p) => p.year > cur.projectionPublished);
+    if (next) {
+      cur.projectionPublished = next.year;
+      emit(cur, "projection_step", {
+        year: next.year,
+        metrics: next.metrics,
+        events: next.events,
+        source: "template",
+      });
+      setTimeout(tickOnce, 800);
+      return;
+    }
+    cur.phase = "building";
+    emit(cur, "phase_change", phaseData("build"));
+    playing.delete(id);
+  };
+  setTimeout(tickOnce, 800);
+}
+
 function scoresOf(m: Metrics): Scores {
   const clamp = (v: number) => Math.round(Math.max(0, Math.min(100, v)));
   return {
@@ -342,6 +380,7 @@ export const mockApi: CityApi = {
       nextEventId: 1,
       events: [],
       projection: [],
+      projectionPublished: 0,
       scores: null,
       ending: null,
       report: null,
@@ -360,7 +399,7 @@ export const mockApi: CityApi = {
       throw new ApiError(400, "invalid_phase", "当前阶段不允许操作");
     c.phase = "building";
     c.metrics = { ...c.metrics, at_phase: "build" };
-    emit(c, "phase_change", { phase: "build", time_left_sec: 0 });
+    emit(c, "phase_change", phaseData("build"));
     return { phase: c.phase };
   },
 
@@ -477,28 +516,11 @@ export const mockApi: CityApi = {
       });
     }
     c.projection = proj;
+    c.projectionPublished = 0;
     c.phase = "projecting";
-    emit(c, "phase_change", { phase: "locked", time_left_sec: 0 });
+    emit(c, "phase_change", phaseData("locked"));
     save(c);
-    // 播放：逐年推送，结束后回到建设（10 §3：推演是只读预览，不写回）
-    proj.forEach((p, i) =>
-      setTimeout(
-        () => {
-          const cur = load(id);
-          emit(cur, "projection_step", {
-            year: p.year,
-            metrics: p.metrics,
-            events: p.events,
-            source: "template",
-          });
-          if (i === proj.length - 1) {
-            cur.phase = "building";
-            emit(cur, "phase_change", { phase: "build", time_left_sec: 0 });
-          }
-        },
-        800 * (i + 1),
-      ),
-    );
+    schedulePlayback(id);
     return { phase: c.phase, projection: proj };
   },
 
@@ -521,7 +543,7 @@ export const mockApi: CityApi = {
       source: "template",
     };
     Object.assign(c, { phase: "report", scores, ending, report });
-    emit(c, "phase_change", { phase: "report", time_left_sec: 0 });
+    emit(c, "phase_change", phaseData("report"));
     emit(c, "report_ready", {
       report,
       city_name: "演示市",
@@ -533,7 +555,7 @@ export const mockApi: CityApi = {
   async backToBuilding(id) {
     const c = load(id);
     c.phase = "building";
-    emit(c, "phase_change", { phase: "build", time_left_sec: 0 });
+    emit(c, "phase_change", phaseData("build"));
     return { phase: c.phase };
   },
 
@@ -542,6 +564,11 @@ export const mockApi: CityApi = {
     if (!set) subscribers.set(id, (set = new Set()));
     set.add(handlers);
     handlers.onConn("open", null);
+    try {
+      if (load(id).phase === "projecting") schedulePlayback(id);
+    } catch {
+      /* 城市不存在：交给 load 报 404 */
+    }
     return () => set!.delete(handlers);
   },
 };
