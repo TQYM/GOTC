@@ -52,6 +52,9 @@
 | InfoFeed | SSE 三栏信息流 | 按事件类型分组渲染样式；自动滚动到底，用户上翻阅读时暂停自动滚 |
 | ProjectionPlayer | 推演期年度快进动画 | 消费后端已完整预计算的 `projection_step` 逐帧推进（约 3.5s/年）；断线或刷新时用会话中的完整 `projection` 按 `projection_published_year` 确定性补帧 |
 | ReportPage | 五维雷达 + 评分 + 结局 + 报告全文 + 分享 | 雷达图自绘 SVG；结局徽章按 ending 值映射插画 |
+| BuildingDetailPage | 学校/医院等特殊建筑专属页（右侧滑出，移动端全屏） | 服务概览/满意度/历史曲线/覆盖高亮/扩建，规格见 [13 §3](13-refined-art-and-interaction.md) |
+| InfoViewBar | 五类信息视图覆盖层（绿地/污染/交通/教育/医疗） | 与专属页联动，见 [13 §4.2](13-refined-art-and-interaction.md) |
+| LabelLayer | 真实地名 Billboard 标注（中文优先、LOD 分级） | labels.json 驱动，见 [13 §2](13-refined-art-and-interaction.md) |
 
 ### 2.4 状态机（前端唯一的状态真相）
 
