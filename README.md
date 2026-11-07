@@ -1,4 +1,4 @@
-# CITY20 
+# CITY20
 
 > 一块地、20 分钟、一个 AI 智囊团——你来做市长，建一座经得起规划学检验的城市。
 
@@ -30,20 +30,70 @@
 
 ## 当前状态
 
-规划已冻结，仓库当前包含后端契约模型与确定性地块生成器（PR-01/02 基础骨架）。REST、SSE、完整模拟引擎、前端页面和 AI 编排按 [18 张 PR 任务卡](docs/plan/08-pr-tasks.md) 继续施工；`docs/plan/` 是唯一执行依据。
+后端 M1～M3 的核心能力已经落地：
+
+- 确定性地块生成、放置校验、人口/地价/财政/交通/污染/幸福度/覆盖率重算，以及 10 年推演；
+- `/api/sessions` 会话 REST 接口，支持创建、查询、放置、拆除、推进阶段、结算和重开；
+- OpenAI 兼容的 AI 叙述抽象与数据大脑 news 触发器，支持阈值判断、8 秒节流合并和模板降级；
+- 健康检查与统一错误信封已经接入。
+
+前端页面、三角色完整信息流和生产级 SSE 网关仍按 [PR 任务卡](docs/plan/08-pr-tasks.md) 推进。当前 SSE 路由提供联调桩流，尚未接入环形缓冲、心跳和断点补发。`docs/plan/` 是唯一执行依据。
+
+最近的规划与契约对齐见提交 [`ea77888`](https://github.com/TQYM/GOTC/commit/ea77888)。
 
 ## 快速开始
 
-当前可验证后端基础骨架：
+### 启动后端
 
 ```bash
 cd backend
 pip install -e ".[dev]"
-pytest -q
-ruff check .
+uvicorn app.main:app --reload --port 8000
 ```
 
-服务入口已提供 `/healthz`，完整游戏接口将在后续 PR 接入。玩法背景见 [docs/game-design.md](docs/game-design.md)，架构导读见 [docs/architecture.md](docs/architecture.md)。
+健康检查：
+
+```bash
+curl http://127.0.0.1:8000/healthz
+```
+
+默认不配置 LLM key 也可以完成一局，AI 输出会自动使用规则模板。需要启用真实模型时，参考 `.env.example` 在启动服务前设置 `CITY20_*` 环境变量；支持 DeepSeek、Qwen、Kimi、GLM，以及其他 OpenAI 兼容端点。
+
+### API 联调
+
+创建一局并固定随机种子：
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/sessions \
+  -H 'content-type: application/json' \
+  -d '{"seed": 42}'
+```
+
+主要端点：
+
+| 方法 | 路径 | 用途 |
+|---|---|---|
+| `POST` | `/api/sessions` | 创建会话，可选 `seed` |
+| `GET` | `/api/sessions/{session_id}` | 获取地块、已放置区块和实时指标 |
+| `POST` | `/api/sessions/{session_id}/place` | 放置区块并返回指标差值 |
+| `POST` | `/api/sessions/{session_id}/remove` | 拆除区块并返回退款与指标差值 |
+| `POST` | `/api/sessions/{session_id}/advance` | 推进 briefing/build/polish 阶段 |
+| `POST` | `/api/sessions/{session_id}/finalize` | 锁定城市并返回推演、结局和报告 |
+| `POST` | `/api/sessions/{session_id}/restart` | 按新 seed 重开一局 |
+| `GET` | `/api/sessions/{session_id}/stream` | SSE 联调流（当前为桩流） |
+
+请求和响应字段以 [02 · 前后端数据契约](docs/plan/02-data-contract.md) 为准。
+
+### 代码质量
+
+在 `backend/` 中运行：
+
+```bash
+ruff check .
+pytest -q
+```
+
+玩法背景见 [docs/game-design.md](docs/game-design.md)，架构导读见 [docs/architecture.md](docs/architecture.md)。
 
 ## 协作规范
 
