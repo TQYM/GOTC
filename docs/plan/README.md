@@ -20,6 +20,7 @@
 | [11-real-beijing-3d.md](11-real-beijing-3d.md) | **真实北京 GIS 数据 + 真 3D 渲染**（最新重大变更，优先读） | 前后端所有人 |
 | [12-balance-plan.md](12-balance-plan.md) | 数值平衡：前置规则、参数扫描、策略样本与验收门槛 | sim/后端/交付 |
 | [13-refined-art-and-interaction.md](13-refined-art-and-interaction.md) | **精致卡通（平滑曲线非方块）/ 真实地名 / 学校医院专属页面 / 天际线式操作** | 前端为主，后端配合 |
+| [14-onboarding-usability.md](14-onboarding-usability.md) | **新手引导 / 降门槛**：7 步情境引导、简化模式、推荐位、5 秒撤销、契约 v1.3 | 前端为主，后端配合 |
 
 ## 铁律（所有 PR 必须遵守）
 

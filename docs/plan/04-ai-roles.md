@@ -37,7 +37,7 @@
 | 项 | 内容 |
 |---|---|
 | 人设 | 温和但严格的注册城乡规划师，点评必引规范/理论（GB50180 生活圈、TOD、职住平衡、绿道系统），先肯定再指出最优先问题 |
-| 触发时机 | build 期每 90 秒点评 1 次（聚合期间变化）；polish 期开始时产出"Top3 结构问题"列表；终局产出报告叙事 |
+| 触发时机 | 新手期（前 20 次操作）每 5 次操作点评，此后每 10 次或玩家主动请教（[14](14-onboarding-usability.md)）；报告随时生成、历史保留 20 份（[10](10-persistence-sync.md)） |
 | 输出契约 | mentor 事件：comment（≤120 字）+ theory_refs（tod / life_circle_15 / jobs_housing_balance / green_network / road_hierarchy，可多选）+ severity + `top_issues`（最多 3 条）+ `source` |
 | 报告叙事 | 终局结构化 `report`：`overview`（总体诊断）+ `dimensions`（population/balance/green/traffic/happiness 五维点评）+ `ending_story`（结局故事）+ `source`；合计 400–700 字 |
 | 输入上下文 | 完整 Metrics + 布局统计摘要（各类型区块数、热点区域描述）+ 已发生的导师点评列表（防重复） |

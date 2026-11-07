@@ -24,7 +24,8 @@
 
 ### 2.1 落地页 `/`
 
-- 标题「CITY20 · 二十分钟市长计划」+ 一句话卖点（AI 规划师陪你造一座城）。
+- 标题「CITY20 · 城市管理者」+ 一句话卖点（真实北京，由你更新；AI 规划师陪你经营一座城）。
+- 首次进入：欢迎三屏（可跳过）→ 引导局（[14](14-onboarding-usability.md)）。
 - 「新开一局」按钮 → `POST /api/sessions` → 跳 `/game/{id}`。
 - 「输入种子复现」输入框（可选，演示/调试用）。
 - 玩法说明：真实北京片区自由更新，不限时；随时快进年份、随时推演未来、随时生成体检报告。
@@ -47,7 +48,7 @@
 | CityScene3D | 3D 场景：地形/既有建筑/玩家区块/悬停高亮/非法格红显 | 按 [11 §6](11-real-beijing-3d.md) 分层；Raycaster 拾取换算 r,c；OrbitControls 相机 |
 | ToolBar | 14 种区块的卡牌列表，拖拽源 | 卡片显示造价/占地；资金不足自动置灰（按本地缓存的 funds，真值等后端） |
 | PlacementLayer | 拖拽悬停时的覆盖格预览 | 合法绿框/非法红框；多格区块按 anchor+形状展开 |
-| MetricsPanel | 14 指标仪表盘 | 数值变化时用 300ms 颜色脉冲（升绿降红）提示 delta |
+| MetricsPanel | 指标仪表盘：简化模式默认 5 指标（人口/资金/幸福度/通勤/绿地），专业模式 14 指标 | 数值变化 300ms 颜色脉冲；简化模式每指标带人话注解（14 §2.1） |
 | PhaseBanner | 阶段名 + 城市年份 `city_year` + 推演/报告入口 | 年份只信后端事件与响应，无倒计时；提供「快进一年」「推演 10 年」「生成报告」按钮 |
 | InfoFeed | SSE 三栏信息流 | 按事件类型分组渲染样式；自动滚动到底，用户上翻阅读时暂停自动滚 |
 | ProjectionPlayer | 推演期年度快进动画 | 消费后端已完整预计算的 `projection_step` 逐帧推进（约 3.5s/年）；断线或刷新时用会话中的完整 `projection` 按 `projection_published_year` 确定性补帧 |
@@ -55,6 +56,10 @@
 | BuildingDetailPage | 学校/医院等特殊建筑专属页（右侧滑出，移动端全屏） | 服务概览/满意度/历史曲线/覆盖高亮/扩建，规格见 [13 §3](13-refined-art-and-interaction.md) |
 | InfoViewBar | 五类信息视图覆盖层（绿地/污染/交通/教育/医疗） | 与专属页联动，见 [13 §4.2](13-refined-art-and-interaction.md) |
 | LabelLayer | 真实地名 Billboard 标注（中文优先、LOD 分级） | labels.json 驱动，见 [13 §2](13-refined-art-and-interaction.md) |
+| OnboardingOverlay | 7 步情境引导：高亮+一句话+真实操作完成条件 | 可跳过重玩；状态本地+存档双持久化，见 [14 §1](14-onboarding-usability.md) |
+| SmartHintBar | 情境提示与一键补齐（资金不足/非法放置/服务缺口） | 人话+怎么办；点击缺口提示直接进放置模式并圈推荐格，见 14 §2 |
+| RecommendMarkers | 推荐格 1/2/3 序号标记，点选即落子 | 数据来自 GET recommend，见 14 §3 |
+| UndoToast | 放置后 5 秒撤销（全额返还） | 拆除/拆迁不在撤销范围，见 14 §2.3 |
 
 ### 2.4 状态机（前端唯一的状态真相）
 
@@ -115,3 +120,4 @@ Zustand store 字段与迁移：
 5. SSE 事件乱序到达（前端故意乱序回放测试）时 UI 不崩、不重播已完成阶段。
 6. 降级模式（后端 AI 关断）下信息流仍有模板文案滚动。
 7. 14 种区块全部可从工具栏放置并渲染正确占地形状。
+8. 新手引导 7 步可完整走完且可跳过；简化模式默认开启；推荐位可落子；5 秒撤销资金地形全恢复（[14](14-onboarding-usability.md)）。
