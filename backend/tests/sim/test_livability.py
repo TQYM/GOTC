@@ -31,7 +31,10 @@ def make_parcel(forest: bool = False) -> Parcel:
         ],
         inherited_road=[],
         constraints=ParcelConstraints(
-            height_limit_m=80, green_line_m=30, buildable_ratio=1.0, briefing="t"
+            height_limit_m=80,
+            green_line_m=30,
+            buildable_ratio=1.0,
+            briefing={"text": "t", "source": "template"},
         ),
     )
 
@@ -42,6 +45,7 @@ def make_tile(tile_type: TileType, anchor: list[int]) -> Tile:
         type=tile_type,
         anchor=anchor,
         cells=expand_cells(tile_type, anchor),
+        orientation="horizontal" if tile_type is TileType.UTIL_BRIDGE else None,
         built_at_year=1,
         upkeep=CATALOG[tile_type].upkeep,
     )

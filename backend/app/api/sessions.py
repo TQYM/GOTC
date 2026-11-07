@@ -65,6 +65,7 @@ async def create_session(
 
 @router.get("/{session_id}", response_model=SessionState)
 async def get_state(session: Annotated[GameSession, Depends(get_session)]) -> SessionState:
+    fr = session.finalize_result
     return SessionState(
         session_id=session.session_id,
         phase=session.phase,
@@ -73,6 +74,13 @@ async def get_state(session: Annotated[GameSession, Depends(get_session)]) -> Se
         tiles=list(session.tiles.values()),
         metrics=session.metrics,
         placements_count=session.placements_count,
+        projection=fr.projection if fr else [],
+        projection_published_year=session.projection_published_year,
+        scores=fr.scores if fr else None,
+        ending=fr.ending if fr else None,
+        report=fr.report if fr else None,
+        city_name=fr.city_name if fr else None,
+        city_name_source=fr.city_name_source if fr else None,
     )
 
 
@@ -84,7 +92,7 @@ async def place(
     async with session.lock:
         before = session.metrics
         tile, metrics, diff, funds_after = session.place(body.type, body.anchor)
-    schedule_news(session, before, metrics, body.type.value, narrator)
+    schedule_news(session, before, metrics, body.type.value, narrator, body.anchor)
     return PlaceResult(tile=tile, metrics=metrics, metrics_diff=diff, funds_after=funds_after)
 
 
@@ -96,7 +104,7 @@ async def remove(
     async with session.lock:
         before = session.metrics
         tile, metrics, diff, funds_after = session.remove(body.tile_id)
-    schedule_news(session, before, metrics, tile.type.value, narrator)
+    schedule_news(session, before, metrics, tile.type.value, narrator, tile.anchor)
     return RemoveResult(tile=tile, metrics=metrics, metrics_diff=diff, funds_after=funds_after)
 
 
