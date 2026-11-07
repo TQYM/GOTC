@@ -1,6 +1,7 @@
 # 06 · 后端方案（FastAPI 数值与编排核心）
 
 > 后端开发者按本文档施工。对前端只暴露 [02 契约](02-data-contract.md)；内部模块划分允许自由调整，但分层边界（§2）不可乱。
+> ⚠️ **存档体系变更（m00594）**：内存会话 + 40min TTL + 倒计时 timer 被 SQLite 事件溯源存档体系取代（不限时、多端同步、op_applied 广播），以 [10](10-persistence-sync.md) 为准；真实片区加载与 redevelop 见 [11](11-real-beijing-3d.md)。
 
 ## 1. 技术选型（已定，不再纠结）
 

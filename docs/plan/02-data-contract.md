@@ -1,7 +1,8 @@
 # 02 · 前后端数据契约
 
 > 本文件是 CITY20 v1 的唯一接口约定。数值由确定性 sim 引擎计算，AI 只生成文字；契约字段、枚举、阶段限制和事件名必须同步修改本文档、Pydantic 模型与契约测试。
-> ⚠️ **v1.1 扩展**（只增不改）：真实片区 Parcel 字段（parcel_id/bbox/buildings_url 等）、`occupied` 地形值、`redevelop` 操作见 [11 §7](11-real-beijing-3d.md)；存档/同步 API v2（saves 体系、op_applied 事件）见 [10](10-persistence-sync.md)。
+> ⚠️ **v1.1 扩展**（只增不改）：真实片区 Parcel 字段（parcel_id/bbox/buildings_url 等）、`occupied` 地形值、`redevelop` 操作见 [11 §7](11-real-beijing-3d.md)。
+> ⚠️ **限时机制废弃（m00594）**：20 分钟倒计时、`time_left_sec`、tick 心跳推进、build/polish 限时阶段全部废弃；不限时阶段（briefing/building/projecting/report）、`city_year`、saves 体系与 `op_applied` 事件以 [10](10-persistence-sync.md) 为准。
 
 ## 0. 通用约定
 

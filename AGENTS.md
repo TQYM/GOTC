@@ -11,9 +11,9 @@ Worktree: `~/项目/.wt/城市模拟沙盘/<slug>`
 
 ## 这是什么
 
-CITY20：AI 驱动的城市规划模拟沙盘，单局硬上限 20 分钟。玩家在程序化生成的地块上完成分区、道路与公共配套规划，确定性 sim 引擎实时推演，AI 三角色（数据大脑 / 市民之声 / 规划导师）以自然语言反馈；终局生成五维诊断报告与 city card。
+CITY20：AI 驱动的城市更新模拟沙盘，**不限时**。玩家以城市管理者身份在**真实北京片区**（OSM 数据离线栅格化，首发朝阳 CBD–通惠河）做更新决策，确定性 sim 引擎实时推演，AI 三角色（数据大脑 / 市民之声 / 规划导师）以自然语言反馈；随时生成五维诊断报告与城市体检标签。
 
-技术栈：Next.js（App Router）+ TypeScript strict + Canvas 2D；FastAPI + Pydantic v2 + sse-starlette；DeepSeek / Qwen / Kimi / GLM 作为 AI 叙述层。会话状态在内存，无数据库、无账号。
+技术栈：Next.js（App Router）+ TypeScript strict + **Three.js / React Three Fiber（卡通风格真 3D）**；FastAPI + Pydantic v2 + sse-starlette；DeepSeek / Qwen / Kimi / GLM 作为 AI 叙述层。**SQLite 事件溯源存档**（`docs/plan/10-persistence-sync.md`），支持多端同步同一存档，无账号。
 
 ## 唯一执行依据
 
@@ -44,4 +44,4 @@ CITY20：AI 驱动的城市规划模拟沙盘，单局硬上限 20 分钟。玩�
 
 ## 范围边界（不做）
 
-用户账号、持久化数据库、多人协作/对战、真实 OSM 数据、原生界面重写（四端一律 Web 壳复用，见 `docs/plan/09-cross-platform.md`）、音效音乐（PR-17 可选）。详见 `docs/plan/00-master.md`。
+用户账号、多人对战、原生界面重写（四端一律 Web 壳复用，见 `docs/plan/09-cross-platform.md`）、音效音乐（PR-17 可选）。注：真实 OSM 数据与 SQLite 存档已分别由 `docs/plan/11-real-beijing-3d.md`、`docs/plan/10-persistence-sync.md` 纳入范围；分享码同玩一个存档属协作非对战。详见 `docs/plan/00-master.md`。

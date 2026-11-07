@@ -1,10 +1,10 @@
 # CITY20
 
-> 一块地、20 分钟、一个 AI 智囊团——你来做市长，建一座经得起规划学检验的城市。
+> 真实北京、不限时、一个 AI 智囊团——你是城市管理者，让熟悉的街区在你手里生长。
 
 一款 **AI 驱动的城市规划模拟沙盘**：以**真实北京片区**（OpenStreetMap 数据离线栅格化）为舞台的真 3D 城市更新游戏——玩家作为城市管理者，在真实路网、水系与既有建筑之间做更新决策；三套 AI 系统（数据大脑 / 市民之声 / 规划导师）实时推演并回应你的每个决策，随时生成城市规划诊断报告。支持多端同步同一存档（见 [docs/plan/10-persistence-sync.md](docs/plan/10-persistence-sync.md)）。
 
-本仓库为 **48 小时极限开发** 比赛项目，技术栈：Next.js + Three.js（前端真 3D，见 [docs/plan/11-real-beijing-3d.md](docs/plan/11-real-beijing-3d.md)）· FastAPI（后端）· DeepSeek / Qwen / Kimi / GLM（AI 层）· Tauri / Capacitor（macOS / Windows / Android / iOS 四端壳，见 [docs/plan/09-cross-platform.md](docs/plan/09-cross-platform.md)）。
+本仓库为 **48 小时极限开发** 比赛项目，技术栈：Next.js + Three.js（前端**卡通风格**真 3D，见 [docs/plan/11-real-beijing-3d.md](docs/plan/11-real-beijing-3d.md)）· FastAPI（后端）· DeepSeek / Qwen / Kimi / GLM（AI 层）· Tauri / Capacitor（macOS / Windows / Android / iOS 四端壳，见 [docs/plan/09-cross-platform.md](docs/plan/09-cross-platform.md)）。
 
 ## 团队成员
 

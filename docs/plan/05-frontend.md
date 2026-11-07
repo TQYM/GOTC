@@ -1,7 +1,8 @@
 # 05 · 前端方案（Next.js 全栈客户端）
 
 > 前端开发者按本文档施工。唯一接口是 [02 契约](02-data-contract.md)；后端可能随时从桩切到真身，**前端不许依赖任何契约之外的字段或行为**。
-> ⚠️ **渲染层重大变更**：Canvas 2D 伪 2.5D 作废，改为 **Three.js 真 3D + 真实北京 GIS 场景**，全部渲染细则以 [11-real-beijing-3d.md](11-real-beijing-3d.md) 为准；本文档的交互/状态机/信息流规格不变。
+> ⚠️ **渲染层重大变更**：Canvas 2D 伪 2.5D 作废，改为 **Three.js 真 3D + 真实北京 GIS 场景（卡通风格）**，全部渲染细则以 [11-real-beijing-3d.md](11-real-beijing-3d.md) 为准。
+> ⚠️ **限时机制废弃（m00594）**：无倒计时、无 build/polish 限时阶段，不限时状态机以 [10](10-persistence-sync.md) 与本文 §2.4 为准；§3.4 倒计时已移除。
 
 ## 1. 技术选型（已定，不再纠结）
 
@@ -26,7 +27,7 @@
 - 标题「CITY20 · 二十分钟市长计划」+ 一句话卖点（AI 规划师陪你造一座城）。
 - 「新开一局」按钮 → `POST /api/sessions` → 跳 `/game/{id}`。
 - 「输入种子复现」输入框（可选，演示/调试用）。
-- 玩法三段说明（建设 15 分钟 → 微调 2 分钟 → 推演看命）。
+- 玩法说明：真实北京片区自由更新，不限时；随时快进年份、随时推演未来、随时生成体检报告。
 
 ### 2.2 游戏页 `/game/[sessionId]` 布局（三栏）
 
@@ -34,7 +35,7 @@
 ┌──────────────┬──────────────────────────┬─────────────┐
 │ 左：指标面板  │ 中：Canvas 沙盘           │ 右：AI 信息流 │
 │ 资金/人口/   │ 48×48 网格 + 地形 + 区块  │ news/citizen│
-│ 通勤/拥堵/   │ 顶部：阶段横幅+倒计时      │ /mentor     │
+│ 通勤/拥堵/   │ 顶部：阶段横幅+城市年份    │ /mentor     │
 │ 幸福度/绿地  │ 底部：建造工具栏           │ 滚动自动置底 │
 └──────────────┴──────────────────────────┴─────────────┘
 ```
@@ -47,7 +48,7 @@
 | ToolBar | 14 种区块的卡牌列表，拖拽源 | 卡片显示造价/占地；资金不足自动置灰（按本地缓存的 funds，真值等后端） |
 | PlacementLayer | 拖拽悬停时的覆盖格预览 | 合法绿框/非法红框；多格区块按 anchor+形状展开 |
 | MetricsPanel | 14 指标仪表盘 | 数值变化时用 300ms 颜色脉冲（升绿降红）提示 delta |
-| PhaseBanner | 阶段名 + 倒计时 + 简报/Top3 展示位 | 倒计时只信后端 `time_left_sec` + 本地补偿渲染；倒计时 ≤30s 变红闪 |
+| PhaseBanner | 阶段名 + 城市年份 `city_year` + 推演/报告入口 | 年份只信后端事件与响应，无倒计时；提供「快进一年」「推演 10 年」「生成报告」按钮 |
 | InfoFeed | SSE 三栏信息流 | 按事件类型分组渲染样式；自动滚动到底，用户上翻阅读时暂停自动滚 |
 | ProjectionPlayer | 推演期年度快进动画 | 消费后端已完整预计算的 `projection_step` 逐帧推进（约 3.5s/年）；断线或刷新时用会话中的完整 `projection` 按 `projection_published_year` 确定性补帧 |
 | ReportPage | 五维雷达 + 评分 + 结局 + 报告全文 + 分享 | 雷达图自绘 SVG；结局徽章按 ending 值映射插画 |
@@ -58,12 +59,11 @@ Zustand store 字段与迁移：
 
 | 状态 | 进入条件 | 出口 |
 |---|---|---|
-| loading | 路由进入 | GET 会话成功 → briefing；404 → 回首页 |
-| briefing | phase=briefing | 用户点「开始建设」或 20s 到 → 调用 `advance`；只接受后端返回的 phase_change |
-| build | phase=build | 后端推 phase_change=polish（15 分钟到） |
-| polish | phase=polish | 用户点「锁定推演」调用 `finalize`，或 2 分钟到由后端自动 finalize；只接受后端进入 `locked` |
-| locked | phase=locked | 后端已计算完整 projection；前端只播放 `projection_step`，第 10 年收到 report_ready 后进入 /report |
-| report | phase=report | 会话恢复或 report_ready 提供 scores、ending、结构化 report、city_name |
+| loading | 路由进入 | GET 存档成功 → 对应当前 phase；404 → 回首页 |
+| briefing | phase=briefing | 用户点「开始建设」→ building（后端确认为准） |
+| building | phase=building | 用户点「推演 10 年」→ projecting；点「生成报告」→ report；`advance` 快进一年留在 building |
+| projecting | phase=projecting | 后端已计算完整 projection；前端播放 `projection_step`；播完玩家自选回 building 或转 report（预览不写回） |
+| report | phase=report | 返回 building 继续建设（不限时，随时再生成）；报告提供 scores、ending、结构化 report、city_name |
 
 **规则：一切状态迁移以 REST 响应或 phase_change 事件为准；本地只许做「乐观显示」（如拖拽悬停），不许做「乐观迁移」。**
 
@@ -85,13 +85,14 @@ Zustand store 字段与迁移：
 - SSE 断开：InfoFeed 顶部显示红色「连接中断，重连中…」；前端每 2s 重连一次，带 Last-Event-ID；恢复后自动隐藏。重连超过 30s 提示用户刷新。
 - 操作请求失败（网络层）：toast + 一键重试；不做自动重试（防重复扣款语义，幂等性问题见 06 §6）。
 
-### 3.4 倒计时
+### 3.4 城市年份（无倒计时）
 
-- 首值来自 REST/SSE 的 time_left_sec，之后前端本地每秒递减渲染；每次 SSE phase_change、tick 或 REST 响应都重置基准。允许 ±2s 漂移，不做对时协议；阶段迁移和自动 finalize 只信后端。
+- `city_year` 来自 REST 响应与 SSE 事件（advance 后 +1），前端只展示不推算；多端同步时以 `op_applied` 事件刷新（见 [10](10-persistence-sync.md)）。
+- 全项目不存在倒计时组件与 `time_left_sec` 消费方。
 
 ## 4. 视觉与动效基调
 
-- 整体「规划院沙盘」气质：真 3D 场景（[11 §6](11-real-beijing-3d.md)），既有建筑灰色系低饱和、玩家建筑按类别色高亮，形成「现状 vs 决策」的视觉对比。
+- 整体「卡通城市沙盘」气质（m00594 决策）：toon 渲染、明快饱和配色、圆润夸张比例，美术规格见 [11 §6.0](11-real-beijing-3d.md)；既有建筑 pastel 灰色系、玩家建筑按类别色高饱和，形成「现状 vs 决策」的视觉对比。
 - 地形配色：flat 米白 / hill 赭石 / river 蓝 / bank 浅蓝 / forest 深绿 / road 灰。
 - 区块配色按大类：住宅暖黄、商业金、工业暗紫、绿地青、服务红、交通蓝、市政灰。
 - 指标脉冲、落子弹跳（200ms）、拆拆除尘、推演镜头缓缓拉远——动效一律 ≤300ms，不抢决策时间。
