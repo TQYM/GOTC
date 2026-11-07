@@ -12,10 +12,12 @@ from dataclasses import dataclass, field
 from app.config import SimConfig
 from app.contracts.common import Source
 from app.contracts.errors import ErrorCode
+from app.contracts.events import PhaseChangeEvent
 from app.contracts.finalize import FinalizeResult
 from app.contracts.metrics import Metrics, MetricsDiff, Phase
 from app.contracts.parcel import Parcel, Terrain
 from app.contracts.tile import Tile, TileType
+from app.core.broadcaster import Broadcaster
 from app.core.errors import GameError
 from app.core.report import build_template_report
 from app.sim import engine
@@ -44,13 +46,14 @@ class GameSession:
     metrics: Metrics | None = None
     finalized: bool = False
     finalize_result: FinalizeResult | None = None
-    projection_published_year: int = 0  # 02 §3.2：SSE 已播放到第几年（PR-13 推进）
+    projection_published_year: int = 0  # 02 §3.2：SSE 已播放到第几年
+    projection_playback_started: bool = False  # 推演播放任务幂等标记（06 §4）
     at_year: int = 1
     cleared_forest: bool = False  # 铲过森林 → 林地抗议入事件池（03 §7）
     current_event: str | None = None  # 当年环境事件（03 §7，一年期）
     years_settled: int = 0
     phase_started_at: float = field(default_factory=time.monotonic)
-    event_log: list[dict] = field(default_factory=list)  # PR-13 换环形缓冲
+    broadcaster: Broadcaster = field(default_factory=Broadcaster)  # 06 §4 环形缓冲
     closed: bool = False  # 被 store 清扫后置位，timer 退出
     created_at: float = field(default_factory=time.monotonic)
     last_active: float = field(default_factory=time.monotonic)
@@ -75,9 +78,42 @@ class GameSession:
             modifier=modifier_for(self.current_event),
         )
 
+    @property
+    def event_log(self) -> list[dict]:
+        """环形缓冲内的事件流水（06 §4：最多 200 条；测试与回放共用）。"""
+        return self.broadcaster.history()
+
     def _log_event(self, event: str, data: dict) -> None:
-        """事件流水（02 §2；PR-13 由 SSE 网关消费）。"""
-        self.event_log.append({"id": len(self.event_log) + 1, "event": event, "data": data})
+        """所有事件走同一 broadcaster：先进环形缓冲再推订阅者（06 §4）。"""
+        self.broadcaster.publish(event, data)
+
+    # ---- SSE 快照与心跳（02 §3.8 / 06 §4） ----
+
+    def _tick_payload(self, before: Metrics | None = None) -> dict:
+        diff = (
+            engine.metrics_diff(before, self.metrics)
+            if before is not None
+            else MetricsDiff(at_year=self.at_year, delta={})
+        )
+        # after 恒带全量指标：心跳校正时间基准，快照/结算都按 02 §2.4 形状
+        payload = diff.model_copy(update={"after": self.metrics})
+        return payload.model_dump(mode="json")
+
+    def publish_heartbeat(self) -> None:
+        """15s 心跳：空 delta 的 tick（02 §3.8），after 携带当前全量指标。"""
+        self._log_event("tick", self._tick_payload())
+
+    def snapshot_events(self) -> list[tuple[str, dict]]:
+        """快照恢复/新连接重置：phase_change + 全量 tick（06 §4 末条）。"""
+        return [
+            (
+                "phase_change",
+                PhaseChangeEvent(
+                    phase=self.phase, time_left_sec=self.time_left_sec
+                ).model_dump(mode="json"),
+            ),
+            ("tick", self._tick_payload()),
+        ]
 
     def _attach_state_to_error(self, exc: GameError) -> GameError:
         """02 §3.3：失败响应附最新 metrics 与 funds_after。"""
@@ -269,6 +305,10 @@ class GameSession:
             city_name_source=Source.TEMPLATE,
         )
         self.finalized = True
+        self._log_event(
+            "phase_change",
+            PhaseChangeEvent(phase=self.phase, time_left_sec=0).model_dump(mode="json"),
+        )
         self._log_event("finalize", self.finalize_result.model_dump(mode="json"))
         return self.finalize_result
 
@@ -280,14 +320,24 @@ class GameSession:
         self.years_settled = 0
         self.time_left_sec = 3 * self.config.economy.year_seconds
         self._recompute()
-        self._log_event("phase_change", {"to": "build", "year": self.at_year})
+        self._log_event(
+            "phase_change",
+            PhaseChangeEvent(
+                phase=self.phase, time_left_sec=self.time_left_sec
+            ).model_dump(mode="json"),
+        )
 
     def _enter_polish(self, now: float) -> None:
         self.phase = Phase.POLISH
         self.phase_started_at = now
         self.time_left_sec = self.config.economy.polish_minutes * 60
         self._recompute()
-        self._log_event("phase_change", {"to": "polish", "year": self.at_year})
+        self._log_event(
+            "phase_change",
+            PhaseChangeEvent(
+                phase=self.phase, time_left_sec=self.time_left_sec
+            ).model_dump(mode="json"),
+        )
 
     def settle_year(self) -> tuple[Metrics, str | None]:
         """年末结算（03 §5）：资金 ±、人口再平衡（全量重算）、5% 环境事件。"""
@@ -297,15 +347,7 @@ class GameSession:
         self.years_settled += 1
         self.current_event = roll_event(self.parcel.seed, self.at_year, self.cleared_forest)
         self._recompute()
-        self._log_event(
-            "tick",
-            {
-                "year": self.at_year,
-                "metrics": self.metrics.model_dump(mode="json"),
-                "metrics_diff": engine.metrics_diff(before, self.metrics).model_dump(mode="json"),
-                "event": self.current_event,
-            },
-        )
+        self._log_event("tick", self._tick_payload(before))  # 年度结算=真实 delta 的 tick
         return self.metrics, self.current_event
 
     def timer_tick(self, now: float | None = None) -> None:

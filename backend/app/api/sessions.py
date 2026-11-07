@@ -7,6 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends
 
+from app.api.playback import ensure_playback
 from app.config import load_sim_config
 from app.contracts.errors import ErrorCode
 from app.contracts.finalize import FinalizeResult
@@ -122,7 +123,9 @@ async def finalize(
     session: Annotated[GameSession, Depends(get_session)],
 ) -> FinalizeResult:
     async with session.lock:
-        return session.finalize()
+        result = session.finalize()
+    ensure_playback(session, narrator)  # 02 §3.8：3.5s/年播放 → report_ready
+    return result
 
 
 @router.post("/{session_id}/restart", status_code=201, response_model=SessionCreated)

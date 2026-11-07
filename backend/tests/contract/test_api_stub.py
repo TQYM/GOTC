@@ -253,14 +253,19 @@ class TestRestart:
 
 
 class TestStream:
-    def test_stream_emits_stub_events(self, client):
+    def test_stream_emits_snapshot_on_connect(self, client):
+        """PR-13 真流：新连接先发 phase_change + 全量 tick 快照（读到即关，不再读全流）。"""
         sid = create(client)["session_id"]
+        seen = []
         with client.stream("GET", f"/api/sessions/{sid}/stream") as resp:
             assert resp.status_code == 200
             assert resp.headers["content-type"].startswith("text/event-stream")
-            body = "".join(resp.iter_text())
-        for event in ("phase_change", "tick", "news", "citizen", "mentor"):
-            assert f"event: {event}" in body
+            for line in resp.iter_lines():
+                if line.startswith("event:"):
+                    seen.append(line.split(":", 1)[1].strip())
+                if len(seen) >= 2:
+                    break
+        assert seen[:2] == ["phase_change", "tick"]
 
     def test_stream_unknown_session(self, client):
         resp = client.get("/api/sessions/ses_nope/stream")
