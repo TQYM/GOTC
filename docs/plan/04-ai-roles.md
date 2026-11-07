@@ -1,7 +1,7 @@
 # 04 · AI 角色体系（后端·叙述层）
 
 > 三个 AI 角色是游戏的"灵魂"，但只负责**把数字说成人话**，绝不碰数值。本文档定角色人设、触发时机、输出契约、prompt 纪律与降级方案；**具体模型由后端开发者自选**（见 §7 选型清单），规划不指定。
-> ⚠️ **现行触发（m00594）**：导师在每 10 个已提交领域 op 后自动点评，或响应城市管理者主动 `POST /api/saves/{city_code}/mentor` 请教；旧 90 秒定时器已废弃。报告反映当前时点、可反复生成，历史保留最近 20 份——见 [10](10-persistence-sync.md)。
+> ⚠️ **现行触发（m00594 + 新手节奏）**：前 20 个已提交领域 op 每 5 个自动点评，此后每 10 个；也可响应城市管理者主动 `POST /api/saves/{city_code}/mentor` 请教。旧 90 秒定时器已废弃。报告反映当前时点、可反复生成，历史保留最近 20 份——见 [10](10-persistence-sync.md)。
 
 ## 1. 分层铁律
 
@@ -82,6 +82,6 @@
 |---|---|---|
 | 创建存档 | 数据大脑（代写 briefing，或规则模板） | 走 SaveState 的 `parcel.constraints.briefing` |
 | 每次 place/remove/redevelop（节流后） | 数据大脑 + 市民之声 | news / citizen；redevelop 复用同一敏感度与防复读链路 |
-| 每 10 个已提交领域 op，或主动请教 | 规划导师 | `POST …/mentor` 返回 202；mentor SSE 带 comment/theory_refs/top_issues |
+| 前 20 个领域 op 每 5 个、此后每 10 个，或主动请教 | 规划导师 | `POST …/mentor` 返回 202；mentor SSE 带 comment/theory_refs/top_issues |
 | project 副本的预测年度标签 | 引擎规则模板 | `ProjectionResult.projection.annual[*].events`；可选 projection_step，均标 `source: "template"` |
 | report 当前时点叙事 | 规划导师 | REST report 可先带模板版；AI 版以相同 report_id 更新并发 report_ready，分数和体检标签不变 |

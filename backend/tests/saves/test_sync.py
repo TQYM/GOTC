@@ -192,28 +192,27 @@ def test_projection_and_report_events_do_not_change_seq(tmp_path):
     asyncio.run(scenario())
 
 
-def test_mentor_every_ten_ops_and_manual_trigger(tmp_path):
+def test_mentor_uses_newcomer_then_regular_operation_cadence(tmp_path):
     async def scenario():
         narrator = CountingNarrator()
         service = make_service(tmp_path, narrator)
         await service.initialize()
         code, _runtime = await started(service)
-        for index in range(10):
+        expected = 0
+        for index in range(1, 31):
             await service.apply(
                 code, "advance", client_op_id=f"year-{index}", payload={}
             )
-        await asyncio.sleep(0)
-        assert narrator.mentor_calls == 1
-        for index in range(10, 20):
-            await service.apply(
-                code, "advance", client_op_id=f"year-{index}", payload={}
-            )
-        await asyncio.sleep(0)
-        assert narrator.mentor_calls == 2
+            await asyncio.sleep(0)
+            if index in {5, 10, 15, 20, 30}:
+                expected += 1
+            assert narrator.mentor_calls == expected
+        await service.project(code, 1)
+        assert narrator.mentor_calls == 5  # 只读推演不占领域 op seq
         await service.mentor(code)
         await asyncio.sleep(0)
-        assert narrator.mentor_calls == 3
-        assert narrator.news_calls == 20
+        assert narrator.mentor_calls == 6
+        assert narrator.news_calls == 30
         await service.close()
 
     asyncio.run(scenario())

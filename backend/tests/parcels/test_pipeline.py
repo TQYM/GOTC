@@ -71,6 +71,7 @@ def test_synthetic_pipeline_is_deterministic_and_priority_correct(tmp_path):
     PIPELINE.prepare(raw_path, second, config())
     assert (first / "parcel.json").read_bytes() == (second / "parcel.json").read_bytes()
     assert (first / "buildings.json").read_bytes() == (second / "buildings.json").read_bytes()
+    assert (first / "labels.json").read_bytes() == (second / "labels.json").read_bytes()
     assert stats["stats"]["buildings"] == 1
     assert stats["stats"]["height_sources"] == {"osm-levels": 1}
 
@@ -79,8 +80,18 @@ def test_synthetic_pipeline_is_deterministic_and_priority_correct(tmp_path):
     NetworkFile.model_validate_json((first / "network.json").read_text("utf-8"))
     assert parcel.crs == "EPSG:32650"
     assert parcel.origin and len(parcel.origin) == 2
-    assert "river" in {cell.value for row in parcel.terrain for cell in row}
-    assert "forest" in {cell.value for row in parcel.terrain for cell in row}
+    river_cells = [
+        (r, c) for r, row in enumerate(parcel.terrain)
+        for c, cell in enumerate(row) if cell.value == "river"
+    ]
+    forest_cells = [
+        (r, c) for r, row in enumerate(parcel.terrain)
+        for c, cell in enumerate(row) if cell.value == "forest"
+    ]
+    assert river_cells and forest_cells
+    assert min(r for r, _c in river_cells) > 36  # 南侧水域：北缘 r=0，不得南北镜像
+    assert max(r for r, _c in forest_cells) < 12  # 北侧公园
+    assert min(c for _r, c in forest_cells) > 36  # 东侧公园
     assets = [asset for chunk in buildings.chunks.values() for asset in chunk]
     assert len(assets) == 1
     assert assets[0].height_m == 24
@@ -101,6 +112,29 @@ def test_height_fallback_and_named_landmarks():
     assert PIPELINE.height_and_levels({"building": "office", "name": "中国尊"})[0] == 528
     ordinary = PIPELINE.height_and_levels({"building": "office", "name": "普通办公楼"})
     assert ordinary[2] == "default-levels"
+
+
+def test_landmark_labels_merge_without_losing_station_pois():
+    square = [[0, 0], [100, 0], [100, 100], [0, 100], [0, 0]]
+    existing = [
+        {"name": "中国尊", "kind": "station", "pos": [10, 20], "importance": 4},
+        {"name": "中国尊", "kind": "landmark", "pos": [999, 999], "importance": 5},
+        {"name": "界外学校", "kind": "school", "pos": [2448, 999], "importance": 3},
+    ]
+    assets = [
+        {"name": "中国尊", "height_m": 528, "base_area_m2": 1000,
+         "height_source": "landmark-manual", "footprint": square},
+        {"name": "普通高楼", "height_m": 130, "base_area_m2": 500,
+         "height_source": "osm-height", "footprint": square},
+    ]
+    labels = PIPELINE.merge_landmark_labels(existing, assets)
+    assert len(labels) == 3 and all(label["name"] != "界外学校" for label in labels)
+    assert labels[0]["kind"] == "station"
+    generated = {label["name"]: label for label in labels[1:]}
+    assert generated["中国尊"]["pos"] == [50.0, 50.0]
+    assert generated["中国尊"]["importance"] == 5
+    assert generated["普通高楼"]["kind"] == "building"
+    assert PIPELINE.merge_landmark_labels(labels, assets) == labels
 
 
 def test_actual_beijing_package_models_budgets_and_landmarks():
@@ -137,3 +171,11 @@ def test_actual_beijing_package_models_budgets_and_landmarks():
         for chunk in raw_buildings["chunks"].values()
         for asset in chunk for x, y in asset["footprint"]
     )
+    labels = json.loads((path / "labels.json").read_text("utf-8"))["labels"]
+    generated = {
+        label["name"]: label for label in labels
+        if label["kind"] in {"landmark", "building"}
+    }
+    assert {"中国尊", "中央电视台总部大楼", "中国国际贸易中心三期A座"} <= set(generated)
+    assert any(label["kind"] == "station" for label in labels)  # 上游站点标注仍保留
+    assert all(0 <= x <= 2400 and 0 <= y <= 2400 for label in labels for x, y in [label["pos"]])

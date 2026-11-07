@@ -53,6 +53,18 @@ export interface NetworkGeometries {
   rails: BufferGeometry | null;
 }
 
+export interface SceneLabel {
+  name: string;
+  kind: string;
+  pos: [number, number];
+  importance: number;
+}
+
+export interface LandmarkLabelLayout {
+  label: SceneLabel;
+  position: [number, number, number];
+}
+
 const TERRAIN_HEIGHTS: Record<Terrain, number> = {
   flat: 0,
   hill: 4,
@@ -545,7 +557,7 @@ export function createNetworkGeometries(file: NetworkFile, worldSize: number): N
     const isRoad = kind.includes("road");
     if (!isRail && !isRoad) continue;
     const target = isRail ? rails : roads;
-    const width = isRail ? (kind.includes("subway") || kind.includes("metro") ? 7 : 5) : roadWidth(feature.level);
+    const width = isRail ? (kind.includes("subway") || kind.includes("metro") ? 7 : 5) : roadWidth(feature.highway ?? feature.level ?? undefined);
     // Different physical heights plus material polygon offset prevent coplanar flicker.
     const y = isRail ? 0.32 : 0.14;
 
@@ -561,4 +573,36 @@ export function createNetworkGeometries(file: NetworkFile, worldSize: number): N
   }
 
   return { roads: toStripGeometry(roads), rails: toStripGeometry(rails) };
+}
+
+/** Prioritize labels and place named landmarks above the actual asset roof. */
+export function createLandmarkLabelLayouts(
+  file: { labels: SceneLabel[] },
+  buildings: BuildingsFile,
+  worldSize: number,
+  limit = 40,
+): LandmarkLabelLayout[] {
+  if (!Number.isFinite(worldSize) || worldSize <= 0) return [];
+  const half = worldSize / 2;
+  const heights = new Map<string, number>();
+  for (const asset of Object.values(buildings.chunks).flat()) {
+    if (!asset.name || !Number.isFinite(asset.height_m) || asset.height_m <= 0) continue;
+    heights.set(asset.name, Math.max(heights.get(asset.name) ?? 0, asset.height_m));
+  }
+  return file.labels
+    .filter((label) => (
+      label.importance >= 4 && label.name &&
+      Array.isArray(label.pos) && label.pos.length === 2 &&
+      label.pos.every((value) => Number.isFinite(value) && value >= 0 && value <= worldSize)
+    ))
+    .sort((a, b) => b.importance - a.importance || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .slice(0, Math.max(0, Math.floor(limit)))
+    .map((label) => ({
+      label,
+      position: [
+        label.pos[0] - half,
+        (heights.get(label.name) ?? 71) + 24,
+        half - label.pos[1],
+      ],
+    }));
 }

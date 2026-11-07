@@ -23,6 +23,7 @@ import type { CityApi } from "@/lib/api";
 import { SCENE_COLORS } from "@/lib/palette";
 import { checkPlacement } from "@/lib/validate";
 import { occupiedSet, tileAt, useGame } from "@/store/game";
+import { rememberRecent } from "@saves/lib/recent";
 import InfoFeed from "./InfoFeed";
 import MetricsPanel from "./MetricsPanel";
 import PhaseBanner from "./PhaseBanner";
@@ -54,13 +55,19 @@ export default function GameView({
   const connect = useGame((s) => s.connect);
   const loadError = useGame((s) => s.loadError);
   const parcel = useGame((s) => s.parcel);
+  const cityName = useGame((s) => s.cityName);
+  const cityYear = useGame((s) => s.cityYear);
   const tiles = useGame((s) => s.tiles);
+  const redevelopedAssetIds = useGame((s) => s.redevelopedAssetIds);
   const funds = useGame((s) => s.metrics?.funds ?? null);
   const phase = useGame((s) => s.phase);
   const tool = useGame((s) => s.tool);
   const busy = useGame((s) => s.busy);
   const confirmRemove = useGame((s) => s.confirmRemove);
   const placeAt = useGame((s) => s.placeAt);
+  const redevelopAt = useGame((s) => s.redevelopAt);
+  const bridgeOrientation = useGame((s) => s.bridgeOrientation);
+  const setBridgeOrientation = useGame((s) => s.setBridgeOrientation);
   const requestRemoveAt = useGame((s) => s.requestRemoveAt);
   const exitTool = useGame((s) => s.exitTool);
   const cancelRemove = useGame((s) => s.cancelRemove);
@@ -80,6 +87,16 @@ export default function GameView({
     if (status !== "ready") return;
     return connect();
   }, [status, connect]);
+
+  useEffect(() => {
+    if (status !== "ready" || !parcel) return;
+    rememberRecent({
+      cityCode: id,
+      name: cityName ?? parcel.district_name ?? "我的城市",
+      parcelId: parcel.parcel_id ?? "sandbox",
+      cityYear,
+    });
+  }, [status, parcel, cityName, cityYear, id]);
 
   // E2E 调试钩子：?debug=1 时暴露 store 供自动化测试读取
   useEffect(() => {
@@ -105,9 +122,16 @@ export default function GameView({
   const check = useMemo(
     () =>
       parcel && placeType && hover
-        ? checkPlacement(parcel, occupied, funds, placeType, hover)
+        ? checkPlacement(
+            parcel,
+            occupied,
+            funds,
+            placeType,
+            hover,
+            placeType === "util_bridge" ? bridgeOrientation : undefined,
+          )
         : null,
-    [parcel, placeType, hover, occupied, funds],
+    [parcel, placeType, hover, occupied, funds, bridgeOrientation],
   );
 
   const ghost = useMemo<GhostSpec | null>(
@@ -117,11 +141,11 @@ export default function GameView({
             type: placeType,
             anchor: hover,
             cells: check.cells,
-            orientation: "horizontal",
+            orientation: bridgeOrientation,
             valid: check.ok,
           }
         : null,
-    [check, placeType, hover],
+    [check, placeType, hover, bridgeOrientation],
   );
 
   const removeTarget =
@@ -176,7 +200,7 @@ export default function GameView({
       ? check?.ok
         ? "copy"
         : "not-allowed"
-      : tool.kind === "remove"
+      : tool.kind === "remove" || tool.kind === "redevelop"
         ? "crosshair"
         : undefined;
 
@@ -202,6 +226,9 @@ export default function GameView({
               <CityScene3D
                 parcel={parcel}
                 tiles={tiles}
+                redevelopedAssetIds={redevelopedAssetIds}
+                buildingsUrl={parcel.buildings_url}
+                networkUrl={parcel.network_url}
                 ghost={ghost}
                 overlay={overlay}
                 cursor={busy ? "progress" : cursor}
@@ -209,6 +236,7 @@ export default function GameView({
                 onCellClick={(cell) => {
                   if (tool.kind === "place") void placeAt(cell);
                   else if (tool.kind === "remove") requestRemoveAt(cell);
+                  else if (tool.kind === "redevelop") void redevelopAt(cell);
                 }}
                 onRightClick={exitTool}
                 debugHook={debug}
@@ -216,6 +244,23 @@ export default function GameView({
             ) : (
               <div className="grid h-full place-items-center text-fg-muted">
                 加载城市…
+              </div>
+            )}
+
+            {placeType === "util_bridge" && (
+              <div className="absolute bottom-3 right-3 z-10 flex rounded-md border border-line bg-bg-elev/95 p-1 text-xs" role="group" aria-label="桥梁方向">
+                {(["horizontal", "vertical"] as const).map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    data-testid={`bridge-${value}`}
+                    aria-pressed={bridgeOrientation === value}
+                    onClick={() => setBridgeOrientation(value)}
+                    className={`min-h-9 rounded px-3 ${bridgeOrientation === value ? "bg-accent text-bg" : ""}`}
+                  >
+                    {value === "horizontal" ? "东西向" : "南北向"}
+                  </button>
+                ))}
               </div>
             )}
 
@@ -234,7 +279,7 @@ export default function GameView({
             )}
             {tool.kind !== "select" && (
               <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-black/50 px-2 py-1 text-xs text-white">
-                {tool.kind === "remove" ? "拆除模式" : "放置模式"} · 右键 / ESC
+                {tool.kind === "remove" ? "拆除模式" : tool.kind === "redevelop" ? "更新改造模式" : "放置模式"} · 右键 / ESC
                 退出
               </div>
             )}

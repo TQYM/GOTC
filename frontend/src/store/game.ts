@@ -19,6 +19,7 @@ import type {
   Tile,
   TileType,
 } from "@/lib/contract";
+import type { OperationResult, ReportResult, SharedPhase } from "@/lib/contractV2";
 import {
   ApiError,
   toGamePhase,
@@ -34,7 +35,10 @@ import { TILE_SPECS } from "@/lib/catalog";
 import { checkPlacement, estimateRefund, occupiedKey } from "@/lib/validate";
 
 export type Tool =
-  { kind: "select" } | { kind: "place"; type: TileType } | { kind: "remove" };
+  | { kind: "select" }
+  | { kind: "place"; type: TileType }
+  | { kind: "remove" }
+  | { kind: "redevelop" };
 
 export interface Toast {
   id: number;
@@ -59,6 +63,10 @@ export interface CityReport {
   ending: Ending;
   report: Report;
   cityName: string | null;
+  reportId?: string;
+  baseYear?: number;
+  baseSeq?: number;
+  createdAt?: string;
 }
 
 export interface RemoveRequest {
@@ -69,10 +77,15 @@ export interface RemoveRequest {
 interface GameState {
   api: CityApi | null;
   id: string | null;
+  cityName: string | null;
   status: "idle" | "loading" | "ready" | "error";
   loadError: string | null;
+  /** 本端可见视图；共享持久化阶段单独保存，其他端不能强制切换本端预览。 */
   phase: GamePhase;
+  sharedPhase: SharedPhase;
   cityYear: number;
+  lastSeq: number;
+  redevelopedAssetIds: string[];
   parcel: Parcel | null;
   tiles: Tile[];
   metrics: Metrics | null;
@@ -86,7 +99,12 @@ interface GameState {
   /** 完整推演切片（后端预计算）与已播放到的年份 */
   projection: ProjectionYear[];
   projectionYear: number;
+  projectionId: string | null;
+  projectionBaseYear: number | null;
+  projectionBaseSeq: number | null;
   cityReport: CityReport | null;
+  reportHistory: ReportResult[];
+  bridgeOrientation: "horizontal" | "vertical";
   /** 已应用的最大推送 id：阶段类事件按 id 单调前进，乱序/重放的旧事件被忽略 */
   phaseEventId: number;
   lastEventId: number;
@@ -110,6 +128,11 @@ interface GameState {
   exitTool(): void;
   startPlanning(): Promise<void>;
   placeAt(anchor: Cell): Promise<void>;
+  redevelopAt(c: Cell): Promise<void>;
+  setBridgeOrientation(value: "horizontal" | "vertical"): void;
+  loadReports(): Promise<void>;
+  openReport(result: ReportResult): void;
+  askMentor(): Promise<void>;
   requestRemoveAt(cell: Cell): void;
   confirmRemoveNow(): Promise<void>;
   cancelRemove(): void;
@@ -127,6 +150,14 @@ export function occupiedSet(tiles: Tile[]): Set<number> {
 
 export function tileAt(tiles: Tile[], [r, c]: Cell): Tile | undefined {
   return tiles.find((t) => t.cells.some(([tr, tc]) => tr === r && tc === c));
+}
+
+function operationOf(result: unknown): OperationResult | null {
+  if (!result || typeof result !== "object") return null;
+  const candidate = result as Partial<OperationResult>;
+  return typeof candidate.seq === "number" && Array.isArray(candidate.tiles)
+    ? candidate as OperationResult
+    : null;
 }
 
 function pulseOf(
@@ -172,13 +203,58 @@ export const useGame = create<GameState>()((set, get) => {
       pulse: { token: s.pulse.token + 1, dir: pulseOf(s.metrics, m) },
     }));
 
+  const applyOperation = (result: OperationResult): boolean => {
+    const s = get();
+    if (result.seq <= s.lastSeq) return false;
+    if (result.seq > s.lastSeq + 1) {
+      // op seq 与 SSE event id 无关；只有 op 序号缺口需要全量恢复。
+      void get().resync();
+      return false;
+    }
+    const redevelopedCells = new Set(
+      result.redevelopment?.cells.map(([r, c]) => `${r},${c}`) ?? [],
+    );
+    const parcel = s.parcel && redevelopedCells.size ? {
+      ...s.parcel,
+      terrain: s.parcel.terrain.map((row, r) => row.map((terrain, c) =>
+        redevelopedCells.has(`${r},${c}`) ? "flat" as const : terrain,
+      )),
+    } : s.parcel;
+    const nextRedevelopedIds = s.redevelopedAssetIds.length === result.redeveloped_asset_ids.length &&
+      s.redevelopedAssetIds.every((assetId, index) => assetId === result.redeveloped_asset_ids[index])
+      ? s.redevelopedAssetIds
+      : result.redeveloped_asset_ids;
+    set({
+      parcel,
+      tiles: result.tiles,
+      redevelopedAssetIds: nextRedevelopedIds,
+      cityYear: result.city_year,
+      lastSeq: result.seq,
+    });
+    applyMetrics(result.metrics);
+    if (result.annual_events.length) {
+      set((state) => ({
+        feed: [...state.feed, ...result.annual_events.map((text, index) => ({
+          key: `annual-${result.seq}-${index}`,
+          kind: "system" as const,
+          text,
+        }))].slice(-FEED_LIMIT),
+      }));
+    }
+    return true;
+  };
+
   return {
     api: null,
     id: null,
+    cityName: null,
     status: "idle",
     loadError: null,
     phase: "briefing",
+    sharedPhase: "briefing",
     cityYear: 1,
+    lastSeq: 0,
+    redevelopedAssetIds: [],
     parcel: null,
     tiles: [],
     metrics: null,
@@ -190,7 +266,12 @@ export const useGame = create<GameState>()((set, get) => {
     feed: [],
     projection: [],
     projectionYear: 0,
+    projectionId: null,
+    projectionBaseYear: null,
+    projectionBaseSeq: null,
     cityReport: null,
+    reportHistory: [],
+    bridgeOrientation: "horizontal",
     phaseEventId: -1,
     lastEventId: -1,
     conn: "connecting",
@@ -205,6 +286,21 @@ export const useGame = create<GameState>()((set, get) => {
         tool: { kind: "select" },
         confirmRemove: null,
         feed: [],
+        phase: "briefing",
+        sharedPhase: "briefing",
+        cityYear: 1,
+        lastSeq: 0,
+        parcel: null,
+        tiles: [],
+        metrics: null,
+        redevelopedAssetIds: [],
+        projection: [],
+        projectionYear: 0,
+        projectionId: null,
+        projectionBaseYear: null,
+        projectionBaseSeq: null,
+        cityReport: null,
+        reportHistory: [],
         phaseEventId: -1,
         lastEventId: -1,
       });
@@ -247,23 +343,28 @@ export const useGame = create<GameState>()((set, get) => {
 
     setPhase(p, eventId) {
       const s = get();
-      if (eventId !== undefined && eventId !== null) {
-        if (eventId < s.phaseEventId) return; // 乱序到达的旧阶段事件：不回退
-        set({ phase: p, phaseEventId: eventId });
-      } else {
-        // REST 响应：以已见过的最新事件 id 为基线，之后补发的旧阶段事件不会覆盖它
-        set({
-          phase: p,
-          phaseEventId: Math.max(s.phaseEventId, s.lastEventId),
-        });
-      }
-      if (p !== "building" && get().tool.kind !== "select")
+      if (eventId !== undefined && eventId !== null && eventId < s.phaseEventId) return;
+      const sharedPhase: SharedPhase = p === "briefing" ? "briefing" : "building";
+      const preserveLocal = s.api?.kind === "v2" && eventId != null && p === "building" &&
+        (s.phase === "projecting" || s.phase === "report");
+      set({
+        sharedPhase,
+        phase: preserveLocal ? s.phase : p,
+        phaseEventId: eventId ?? Math.max(s.phaseEventId, s.lastEventId),
+      });
+      if (!preserveLocal && p !== "building" && get().tool.kind !== "select")
         set({ tool: { kind: "select" }, confirmRemove: null });
     },
 
     applyEvent(e) {
       if (e.id !== null && e.id > get().lastEventId) set({ lastEventId: e.id });
       switch (e.event) {
+        case "snapshot":
+          get().applySnapshot(e.data);
+          return;
+        case "op_applied":
+          applyOperation(e.data);
+          return;
         case "tick": {
           const d = e.data;
           const cur = get().metrics;
@@ -282,19 +383,25 @@ export const useGame = create<GameState>()((set, get) => {
         }
         case "phase_change":
           get().setPhase(toGamePhase(e.data.phase), e.id);
+          if (e.data.city_year !== undefined) set({ cityYear: e.data.city_year });
           return;
         case "city_year":
           if (e.data.city_year >= get().cityYear)
             set({ cityYear: e.data.city_year });
           return;
         case "projection_step":
+          // v2 ProjectionPlayer 消费完整本端结果；忽略其他端/服务端的瞬时连发。
+          // 本地播放器用 id=null 显式推进；v1 仍兼容原来的 SSE 播放。
+          if (get().api?.kind === "v2" && e.id !== null) return;
+          if (get().phase !== "projecting") return;
           // 只前进不重播：已播放过的年份（含断线补发）直接忽略
           if (e.data.year > get().projectionYear)
             set({ projectionYear: e.data.year });
           return;
         case "report_ready": {
           const cur = get().cityReport;
-          if (cur)
+          const reportId = "report_id" in e.data ? e.data.report_id : null;
+          if (cur && (!reportId || !cur.reportId || cur.reportId === reportId))
             set({
               cityReport: {
                 ...cur,
@@ -302,6 +409,14 @@ export const useGame = create<GameState>()((set, get) => {
                 cityName: e.data.city_name,
               },
             });
+          if (reportId && "report_id" in e.data) {
+            const result = e.data;
+            set((state) => ({
+              reportHistory: state.reportHistory.some((r) => r.report_id === reportId)
+                ? state.reportHistory.map((r) => r.report_id === reportId ? result : r)
+                : [result, ...state.reportHistory].slice(0, 20),
+            }));
+          }
           return;
         }
         case "news":
@@ -328,23 +443,35 @@ export const useGame = create<GameState>()((set, get) => {
     },
 
     applySnapshot(s) {
+      const sharedPhase: SharedPhase = s.phase === "briefing" ? "briefing" : "building";
+      const current = get();
+      if (current.id === s.id && s.lastSeq < current.lastSeq) return;
+      const keepLocalView = sharedPhase === "building" &&
+        (current.phase === "projecting" || current.phase === "report");
+      const snapshotView = s.phase === "projecting" || s.phase === "report" ? s.phase : null;
+      const phase = snapshotView ?? (keepLocalView ? current.phase : sharedPhase);
       set({
+        id: s.id,
+        cityName: s.name ?? s.cityName,
         parcel: s.parcel,
         tiles: s.tiles,
+        redevelopedAssetIds: s.redevelopedAssetIds,
         metrics: s.metrics,
-        phase: s.phase,
+        sharedPhase,
+        phase,
         cityYear: s.cityYear,
-        projection: s.projection,
-        projectionYear: s.projectionPublishedYear,
-        cityReport:
-          s.scores && s.ending && s.report
-            ? {
-                scores: s.scores,
-                ending: s.ending,
-                report: s.report,
-                cityName: s.cityName,
-              }
-            : null,
+        lastSeq: s.lastSeq,
+        projection: s.projection.length ? s.projection : (phase === "projecting" ? current.projection : []),
+        projectionYear: s.projectionPublishedYear || current.projectionYear,
+        projectionId: s.projectionId ?? current.projectionId,
+        projectionBaseYear: s.projectionBaseYear ?? current.projectionBaseYear,
+        projectionBaseSeq: s.projectionBaseSeq ?? current.projectionBaseSeq,
+        cityReport: s.scores && s.ending && s.report ? {
+          scores: s.scores,
+          ending: s.ending,
+          report: s.report,
+          cityName: s.cityName,
+        } : (phase === "report" ? current.cityReport : null),
       });
     },
 
@@ -366,7 +493,8 @@ export const useGame = create<GameState>()((set, get) => {
       set({ busy: true });
       try {
         const r = await api.startPlanning(id);
-        get().setPhase(r.phase);
+        if (r.snapshot) get().applySnapshot(r.snapshot);
+        else get().setPhase(r.phase);
       } catch (e) {
         fail(e, null, () => void get().startPlanning());
       } finally {
@@ -380,7 +508,8 @@ export const useGame = create<GameState>()((set, get) => {
       set({ busy: true });
       try {
         const r = await api.advanceYear(id);
-        applyMetrics(r.metrics);
+        if (r.operation) applyOperation(r.operation);
+        else applyMetrics(r.metrics);
         // 年份只信后端：取响应值，不在本地 +1
         set({ cityYear: Math.max(get().cityYear, r.cityYear) });
         get().setPhase(r.phase);
@@ -398,7 +527,14 @@ export const useGame = create<GameState>()((set, get) => {
       set({ busy: true });
       try {
         const r = await api.project(id);
-        set({ projection: r.projection, projectionYear: 0 });
+        set({
+          projection: r.projection,
+          projectionYear: 0,
+          projectionId: r.projectionId ?? null,
+          projectionBaseYear: r.baseYear ?? null,
+          projectionBaseSeq: r.baseSeq ?? null,
+          cityReport: null,
+        });
         if (r.final) {
           set({
             cityReport: {
@@ -423,14 +559,21 @@ export const useGame = create<GameState>()((set, get) => {
       set({ busy: true });
       try {
         const r = await api.report(id);
-        set({
+        set((state) => ({
           cityReport: {
             scores: r.scores,
             ending: r.ending,
             report: r.report,
             cityName: r.cityName,
+            reportId: r.result?.report_id,
+            baseYear: r.result?.base_year,
+            baseSeq: r.result?.base_seq,
+            createdAt: r.result?.created_at,
           },
-        });
+          reportHistory: r.result
+            ? [r.result, ...state.reportHistory.filter((item) => item.report_id !== r.result!.report_id)].slice(0, 20)
+            : state.reportHistory,
+        }));
         get().setPhase(r.phase);
       } catch (e) {
         fail(e, null, () => void get().makeReport());
@@ -442,6 +585,10 @@ export const useGame = create<GameState>()((set, get) => {
     async backToBuilding() {
       const { api, id, busy } = get();
       if (!api || !id || busy) return;
+      if (api.kind === "v2") {
+        get().setPhase(get().sharedPhase);
+        return;
+      }
       set({ busy: true });
       try {
         const r = await api.backToBuilding(id);
@@ -454,7 +601,7 @@ export const useGame = create<GameState>()((set, get) => {
     },
 
     async placeAt(anchor) {
-      const { api, id, tool, parcel, tiles, metrics, busy, phase } = get();
+      const { api, id, tool, parcel, tiles, metrics, busy, phase, bridgeOrientation } = get();
       if (!api || !id || !parcel || tool.kind !== "place" || busy) return;
       if (phase !== "building") return;
       const chk = checkPlacement(
@@ -463,6 +610,7 @@ export const useGame = create<GameState>()((set, get) => {
         metrics?.funds ?? null,
         tool.type,
         anchor,
+        tool.type === "util_bridge" ? bridgeOrientation : undefined,
       );
       if (!chk.ok) {
         // 非法格禁止落下：不发请求，只给人话原因
@@ -476,11 +624,15 @@ export const useGame = create<GameState>()((set, get) => {
           type,
           anchor,
           ...(type === "util_bridge"
-            ? { orientation: "horizontal" as const }
+            ? { orientation: bridgeOrientation }
             : {}),
         });
-        set((s) => ({ tiles: [...s.tiles, r.tile] }));
-        applyMetrics(r.metrics);
+        const op = operationOf(r);
+        if (op) applyOperation(op);
+        else {
+          set((s) => ({ tiles: [...s.tiles, r.tile] }));
+          applyMetrics(r.metrics);
+        }
         get().toast({
           tone: "ok",
           title: `${TILE_SPECS[type].name}建好了`,
@@ -488,6 +640,81 @@ export const useGame = create<GameState>()((set, get) => {
         });
       } catch (e) {
         fail(e, chk.reason, () => void get().placeAt(anchor));
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    setBridgeOrientation(value) {
+      set({ bridgeOrientation: value });
+    },
+
+    async redevelopAt(anchor) {
+      const { api, id, parcel, tool, busy, phase } = get();
+      if (!api || !id || !parcel || tool.kind !== "redevelop" || busy || phase !== "building") return;
+      if (!api.redevelop) {
+        get().toast({ tone: "info", title: "当前模式不支持既有建筑更新改造" });
+        return;
+      }
+      if (parcel.terrain[anchor[0]]?.[anchor[1]] !== "occupied") {
+        get().toast({ tone: "info", title: "请点击既有建筑的 occupied 格" });
+        return;
+      }
+      set({ busy: true });
+      const before = get().metrics?.funds ?? 0;
+      try {
+        const result = await api.redevelop(id, anchor);
+        applyOperation(result);
+        const detail = result.redevelopment;
+        get().toast({
+          tone: "ok",
+          title: detail ? `已完成 ${detail.asset_id} 更新改造` : "更新改造完成",
+          hint: detail
+            ? `释放 ${detail.cells.length} 格 · 拆迁 ${yuan(detail.demolition_cost)} · 幸福度 ${detail.happiness_delta}`
+            : `资金变化 ${yuan(result.funds_after - before)}`,
+        });
+      } catch (e) {
+        fail(e, null, () => void get().redevelopAt(anchor));
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    async loadReports() {
+      const { api, id } = get();
+      if (!api?.reports || !id) return;
+      try {
+        set({ reportHistory: await api.reports(id) });
+      } catch (e) {
+        fail(e);
+      }
+    },
+
+    openReport(result) {
+      set({
+        cityReport: {
+          scores: result.scores,
+          ending: result.ending,
+          report: result.report,
+          cityName: result.city_name,
+          reportId: result.report_id,
+          baseYear: result.base_year,
+          baseSeq: result.base_seq,
+          createdAt: result.created_at,
+        },
+      });
+      get().setPhase("report");
+    },
+
+    async askMentor() {
+      const { api, id, busy } = get();
+      if (!api?.mentor || !id || busy) return;
+      set({ busy: true });
+      try {
+        await api.mentor(id);
+        get().toast({ tone: "info", title: "已请教规划导师", hint: "建议稍后经信息流到达，不会阻塞建设" });
+      } catch (e) {
+        fail(e, null, () => void get().askMentor());
       } finally {
         set({ busy: false });
       }
@@ -516,12 +743,14 @@ export const useGame = create<GameState>()((set, get) => {
       const { tile } = confirmRemove;
       try {
         const r = await api.remove(id, tile.id);
-        set((s) => ({
-          tiles: s.tiles.filter((t) => t.id !== tile.id),
-          confirmRemove: null,
-        }));
         const before = get().metrics?.funds ?? r.funds_after;
-        applyMetrics(r.metrics);
+        const op = operationOf(r);
+        set({ confirmRemove: null });
+        if (op) applyOperation(op);
+        else {
+          set((s) => ({ tiles: s.tiles.filter((t) => t.id !== tile.id) }));
+          applyMetrics(r.metrics);
+        }
         get().toast({
           tone: "ok",
           title: `已拆除${TILE_SPECS[tile.type].name}`,

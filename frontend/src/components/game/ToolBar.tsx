@@ -124,6 +124,22 @@ export default function ToolBar() {
           返还 30%
         </span>
       </button>
+      <button
+        type="button"
+        data-testid="tool-redevelop"
+        aria-pressed={tool.kind === "redevelop"}
+        onClick={() =>
+          tool.kind === "redevelop" ? exitTool() : setTool({ kind: "redevelop" })
+        }
+        className={`min-h-16 min-w-24 shrink-0 rounded-lg border px-3 py-2 text-sm font-semibold ${
+          tool.kind === "redevelop"
+            ? "border-amber-400 bg-amber-500/20 ring-2 ring-amber-400"
+            : "border-line bg-bg-elev hover:border-fg-muted"
+        } ${disabled ? "opacity-45" : ""}`}
+      >
+        更新改造
+        <span className="block text-xs font-normal text-fg-muted">点既有建筑</span>
+      </button>
       {TILE_ORDER.map((t) => (
         <TileCard
           key={t}

@@ -1,6 +1,6 @@
 import type { CityApi } from "./cityApi";
 import { mockApi } from "./mockApi";
-import { sessionsV1 } from "./sessionsV1";
+import { savesV2 } from "./savesV2";
 
 export * from "./cityApi";
 export { ApiError } from "./http";
@@ -9,5 +9,5 @@ export { ApiError } from "./http";
 export function pickApi(search?: URLSearchParams | null): CityApi {
   if (search?.get("mock") === "1" || process.env.NEXT_PUBLIC_USE_MOCK === "1")
     return mockApi;
-  return sessionsV1;
+  return savesV2;
 }

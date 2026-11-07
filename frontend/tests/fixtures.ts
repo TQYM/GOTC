@@ -13,7 +13,13 @@ export function makeState(overrides: Partial<SaveState> = {}): SaveState {
     parcel: {
       parcel_id: "beijing_cbd", district_name: "测试 CBD", size: 2, cell_size_m: 50,
       crs: "EPSG:32650", origin: [0, 0], bbox: [116, 39, 117, 40],
-      terrain: [["occupied", "flat"], ["river", "forest"]], constraints: {}, seed: 1,
+      terrain: [["occupied", "flat"], ["river", "forest"]],
+      inherited_road: [],
+      constraints: {
+        height_limit_m: 150, green_line_m: 50, buildable_ratio: 0.7,
+        briefing: { text: "测试简报", source: "template" },
+      },
+      seed: 1,
       buildings_url: "/static/parcels/beijing_cbd/buildings.json",
       network_url: "/static/parcels/beijing_cbd/network.json", data_version: "osm-test",
     },

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   cellToWorld,
+  createExistingAssetChunks,
+  createExistingBuildingGeometries,
+  createLandmarkLabelLayouts,
+  createNetworkGeometries,
   flattenActiveAssets,
   getCellBounds,
   getPlacementCells,
@@ -92,6 +96,48 @@ describe("active existing assets", () => {
     expect(flattenActiveAssets(undefined, [])).toEqual([]);
     expect(flattenActiveAssets(file, ["asset-a", "asset-b", "asset-c"])).toEqual([]);
   });
+
+  it("extrudes canonical local-metre footprints without mirroring north/south", () => {
+    const layers = createExistingBuildingGeometries([makeAsset("asset-a")], 100);
+    expect(layers).toHaveLength(1);
+    layers[0].geometry.computeBoundingBox();
+    const bounds = layers[0].geometry.boundingBox!;
+    expect(bounds.min.x).toBeCloseTo(-50);
+    expect(bounds.max.x).toBeCloseTo(-30);
+    expect(bounds.min.z).toBeCloseTo(30);
+    expect(bounds.max.z).toBeCloseTo(50);
+    expect(bounds.min.y).toBeCloseTo(0.28);
+    expect(bounds.max.y).toBeCloseTo(12.28);
+    for (const layer of layers) layer.geometry.dispose();
+  });
+
+  it("builds frustum chunks and removes redeveloped assets from their bounds", () => {
+    const file: BuildingsFile = { parcel_id: "beijing_cbd", chunks: { "0:0": [makeAsset("a"), makeAsset("b")] } };
+    expect(createExistingAssetChunks(file, [], 100)[0].assets).toHaveLength(2);
+    expect(createExistingAssetChunks(file, ["a", "b"], 100)).toEqual([]);
+  });
+});
+
+describe("canonical network geometry", () => {
+  it("uses highway widths and keeps north-edge paths in the correct world quadrant", () => {
+    const geometries = createNetworkGeometries({
+      parcel_id: "beijing_cbd",
+      features: [
+        { feature_id: "road", kind: "road", highway: "primary", path: [[0, 0], [100, 0]] },
+        { feature_id: "rail", kind: "rail", path: [[0, 20], [100, 20]] },
+      ],
+    }, 100);
+    expect(geometries.roads).not.toBeNull();
+    geometries.roads!.computeBoundingBox();
+    const road = geometries.roads!.boundingBox!;
+    expect(road.min.x).toBeCloseTo(-50);
+    expect(road.max.x).toBeCloseTo(50);
+    expect(road.min.z).toBeCloseTo(43); // primary = 14m，北缘中心 z=50
+    expect(road.max.z).toBeCloseTo(57);
+    expect(geometries.rails).not.toBeNull();
+    geometries.roads!.dispose();
+    geometries.rails!.dispose();
+  });
 });
 
 describe("multi-cell bounds", () => {
@@ -120,5 +166,34 @@ describe("multi-cell bounds", () => {
     expect(getPlacementCells([47, 47], "com_cbd")).toEqual([
       [47, 47], [47, 48], [48, 47], [48, 48],
     ]);
+  });
+});
+
+describe("landmark labels", () => {
+  it("uses actual roof heights, north-edge coordinates and importance order", () => {
+    const tower = { ...makeAsset("tower"), name: "中国尊", height_m: 528 };
+    const file: BuildingsFile = { parcel_id: "beijing_cbd", chunks: { "0:0": [tower] } };
+    const layouts = createLandmarkLabelLayouts({
+      labels: [
+        { name: "普通站点", kind: "station", pos: [100, 200], importance: 4 },
+        { name: "中国尊", kind: "landmark", pos: [1200, 1200], importance: 5 },
+        { name: "低优先级", kind: "shop", pos: [10, 10], importance: 3 },
+        { name: "界外", kind: "school", pos: [2401, 10], importance: 5 },
+      ],
+    }, file, 2400);
+    expect(layouts.map((layout) => layout.label.name)).toEqual(["中国尊", "普通站点"]);
+    expect(layouts[0].position).toEqual([0, 552, 0]);
+    expect(layouts[1].position).toEqual([-1100, 95, 1000]);
+  });
+
+  it("sorts before applying the display limit", () => {
+    const layouts = createLandmarkLabelLayouts({
+      labels: [
+        { name: "次重要", kind: "station", pos: [1, 1], importance: 4 },
+        { name: "最重要", kind: "landmark", pos: [2, 2], importance: 5 },
+      ],
+    }, { parcel_id: "beijing_cbd", chunks: {} }, 100, 1);
+    expect(layouts).toHaveLength(1);
+    expect(layouts[0].label.name).toBe("最重要");
   });
 });

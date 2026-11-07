@@ -8,7 +8,10 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   compress: false,
   async rewrites() {
-    return [{ source: "/api/:path*", destination: `${API_BASE}/api/:path*` }];
+    return [
+      { source: "/api/:path*", destination: `${API_BASE}/api/:path*` },
+      { source: "/static/:path*", destination: `${API_BASE}/static/:path*` },
+    ];
   },
   turbopack: {
     rules: {

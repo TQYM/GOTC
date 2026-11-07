@@ -296,7 +296,8 @@ class SaveService:
         cause = tile.type.value if tile is not None else op_type
         anchor = tile.anchor if tile is not None else payload.get("anchor")
         schedule_news(working, before, working.metrics, cause, self.narrator, anchor)
-        if seq % 10 == 0:
+        # 04 §4：前 20 个领域 op 每 5 个，之后每 10 个；只读/叙事请求不占 seq。
+        if seq > 0 and seq % (5 if seq <= 20 else 10) == 0:
             self._spawn(self.narrator.mentor_comment(working))
         return result
 

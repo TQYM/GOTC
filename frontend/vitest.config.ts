@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
 
 export default defineConfig({
   esbuild: { jsx: "automatic" },
@@ -9,6 +10,9 @@ export default defineConfig({
     clearMocks: true,
   },
   resolve: {
-    alias: { "@": new URL(".", import.meta.url).pathname },
+    alias: [
+      { find: "@saves", replacement: fileURLToPath(new URL(".", import.meta.url)) },
+      { find: "@", replacement: fileURLToPath(new URL("./src", import.meta.url)) },
+    ],
   },
 });

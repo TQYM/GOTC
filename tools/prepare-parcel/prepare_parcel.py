@@ -126,6 +126,55 @@ def write_json(path: Path, payload: Any) -> int:
     return path.stat().st_size
 
 
+def merge_landmark_labels(
+    existing: list[dict[str, Any]],
+    assets: list[dict[str, Any]],
+    *,
+    min_height_m: float = 120.0,
+    world_size_m: float = 2400.0,
+) -> list[dict[str, Any]]:
+    """为真实高楼补离线标注；保留站点/POI，同名建筑取最高代表资产。
+
+    footprint 使用 EPSG:32650 平移后的本地米坐标，y 向北；渲染端负责转为
+    Three.js 的 z 向南，不能在这里按行号再次镜像。
+    """
+    candidates: dict[str, tuple[float, float, dict[str, Any]]] = {}
+    for asset in assets:
+        name = str(asset.get("name") or "").strip()
+        height = float(asset.get("height_m") or 0)
+        footprint = asset.get("footprint") or []
+        if not name or height < min_height_m or len(footprint) < 3:
+            continue
+        center = Polygon(footprint).centroid
+        landmark = height >= 200 or asset.get("height_source") == "landmark-manual"
+        label = {
+            "name": name,
+            "name_en": None,
+            "kind": "landmark" if landmark else "building",
+            "pos": [round(center.x, 1), round(center.y, 1)],
+            "importance": 5 if landmark else 4,
+        }
+        rank = (height, float(asset.get("base_area_m2") or 0))
+        if name not in candidates or rank > candidates[name][:2]:
+            candidates[name] = (rank[0], rank[1], label)
+    generated_names = set(candidates)
+    preserved = []
+    for label in existing:
+        if label.get("name") in generated_names and label.get("kind") in {"landmark", "building"}:
+            continue
+        pos = label.get("pos")
+        if not isinstance(pos, list) or len(pos) != 2:
+            continue
+        if not all(isinstance(value, (int, float)) and 0 <= value <= world_size_m for value in pos):
+            continue
+        preserved.append(label)
+    generated = sorted(
+        (value[2] for value in candidates.values()),
+        key=lambda label: (-label["importance"], label["name"]),
+    )
+    return preserved + generated
+
+
 def prepare(input_path: Path, output_dir: Path, config: dict[str, Any]) -> dict[str, Any]:
     raw_bytes = input_path.read_bytes()
     raw = json.loads(raw_bytes)
@@ -291,6 +340,15 @@ def prepare(input_path: Path, output_dir: Path, config: dict[str, Any]) -> dict[
         "network_url": "/static/parcels/beijing_cbd/network.json",
     }
     output_dir.mkdir(parents=True, exist_ok=True)
+    labels_path = output_dir / "labels.json"
+    existing_labels: list[dict[str, Any]] = []
+    if labels_path.is_file():
+        existing_labels = json.loads(labels_path.read_text("utf-8")).get("labels", [])
+    labels = merge_landmark_labels(
+        existing_labels,
+        [asset for items in chunks.values() for asset in items],
+        world_size_m=size * cell_size,
+    )
     sizes = {
         "parcel.json": write_json(output_dir / "parcel.json", parcel),
         "buildings.json": write_json(output_dir / "buildings.json", {
@@ -300,6 +358,7 @@ def prepare(input_path: Path, output_dir: Path, config: dict[str, Any]) -> dict[
         "network.json": write_json(output_dir / "network.json", {
             "parcel_id": "beijing_cbd", "data_version": data_version, "features": final_networks,
         }),
+        "labels.json": write_json(labels_path, {"labels": labels}),
     }
     stats.update({
         "raw_elements": len(raw.get("elements", [])),
@@ -309,6 +368,7 @@ def prepare(input_path: Path, output_dir: Path, config: dict[str, Any]) -> dict[
         "river_cells": sum(cell == "river" for row in terrain for cell in row),
         "forest_cells": sum(cell == "forest" for row in terrain for cell in row),
         "network_features": len(final_networks), "height_sources": dict(height_sources),
+        "labels": len(labels),
         "population": sum(asset["population"] for items in chunks.values() for asset in items),
         "jobs": sum(asset["jobs"] for items in chunks.values() for asset in items),
         "upkeep": sum(asset["upkeep"] for items in chunks.values() for asset in items),

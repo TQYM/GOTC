@@ -10,8 +10,10 @@ export default function ProjectionPlayer({ result, onClose }: { result: Projecti
   const step = result.projection[index];
   useEffect(() => {
     if (!playing) return;
-    if (index >= result.projection.length - 1) { setPlaying(false); return; }
-    const timer = window.setTimeout(() => setIndex((value) => value + 1), 1200);
+    const timer = window.setTimeout(() => {
+      if (index >= result.projection.length - 1) setPlaying(false);
+      else setIndex((value) => value + 1);
+    }, 1200);
     return () => window.clearTimeout(timer);
   }, [playing, index, result.projection.length]);
   if (!step) return null;

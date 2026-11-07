@@ -11,11 +11,11 @@
 | 功能性建筑 | 真实位置与名称保留；外观可为生成体块 |
 | 普通建筑 | 可使用 `prepare.py` 的道路距离衰减 × 邻接凝聚生成策略，seed 固定可复现 |
 
-`labels.json` 保留真实中文地名与 importance LOD；资产几何和经济字段在写入运行时包前必须统一为下方 canonical schema。
+`labels.json` 保留真实中文地名与 importance LOD。转换器会保留界内站点/POI，并为 ≥120m 的命名真实建筑补充 importance 4 标注、为 ≥200m 或人工 landmark 补 importance 5 标注；同名建筑取最高代表资产，界外 POI 会被裁剪。资产几何和经济字段在写入运行时包前必须统一为下方 canonical schema。
 
 ## canonical 运行时包
 
-后端与 saves v2 统一消费 `parcel.json`、`buildings.json`（`chunks`）、`network.json`（`features`）、`source.json`；网格坐标为北端 `r=0`，矢量坐标保持 EPSG:32650 局部米制 x 东 y 北。不得把上游 `prepare.py` 的南端 `r=0` 行序直接混入运行时文件。
+后端与 saves v2 统一消费 `parcel.json`、`buildings.json`（`chunks`）、`network.json`（`features`）、`source.json`；网格坐标为北端 `r=0`，矢量坐标保持 EPSG:32650 局部米制 x 东 y 北。不得把上游 `prepare.py` 的南端 `r=0` 行序直接混入运行时文件。当前 canonical 包保留 921 个真实/补全资产与 214 条界内 labels；上游 375 个合成体块只作美术策略参考，不反向覆盖真实 footprint。
 
 ```bash
 # 在 backend 的隔离 venv 中安装工具依赖

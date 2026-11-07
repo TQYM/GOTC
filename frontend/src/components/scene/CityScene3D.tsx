@@ -15,6 +15,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { Cell, Parcel, Tile } from "@/lib/contract";
 import { SCENE_COLORS } from "@/lib/palette";
 import CameraRig from "./CameraRig";
+import RealCityLayers from "./RealCityLayers";
 import { cellToWorld, gridOf, TERRAIN_HEIGHT } from "./coords";
 import {
   CellFrames,
@@ -38,6 +39,10 @@ export interface SceneStats {
 export interface CityScene3DProps {
   parcel: Parcel;
   tiles: Tile[];
+  /** saves v2 的真实资产与更新改造过滤。 */
+  redevelopedAssetIds?: string[];
+  buildingsUrl?: string | null;
+  networkUrl?: string | null;
   /** 放置预览（PR-05 拖拽时传入）：半透明 ghost + 覆盖格红绿框 */
   ghost?: GhostSpec | null;
   onCellHover?: (cell: Cell | null) => void;
@@ -118,6 +123,9 @@ function DebugHook({ parcel }: { parcel: Parcel }) {
 export default function CityScene3D({
   parcel,
   tiles,
+  redevelopedAssetIds = [],
+  buildingsUrl = parcel.buildings_url,
+  networkUrl = parcel.network_url,
   ghost = null,
   onCellHover,
   onCellClick,
@@ -218,7 +226,17 @@ export default function CityScene3D({
           onPick={handlePick}
         />
         <ForestLayer parcel={parcel} tiles={tiles} />
-        <OccupiedLayer parcel={parcel} />
+        {buildingsUrl || networkUrl ? (
+          <RealCityLayers
+            buildingsUrl={buildingsUrl}
+            networkUrl={networkUrl}
+            redevelopedAssetIds={redevelopedAssetIds}
+            worldSize={extent}
+            cellSize={parcel.cell_size_m}
+          />
+        ) : (
+          <OccupiedLayer parcel={parcel} />
+        )}
         <TileLayer parcel={parcel} tiles={tiles} />
         <HoverFrame parcel={parcel} cell={ghost || overlay ? null : hover} />
         <GhostLayer parcel={parcel} ghost={ghost} />

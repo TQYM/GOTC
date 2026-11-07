@@ -218,9 +218,11 @@ function snapshot(c: MockCity): CitySnapshot {
     id: c.id,
     parcel,
     tiles: c.tiles,
+    redevelopedAssetIds: [],
     metrics: c.metrics,
     phase: c.phase,
     cityYear: c.cityYear,
+    lastSeq: c.ops,
     projection: c.projection,
     projectionPublishedYear: c.projectionPublished,
     scores: c.scores,
@@ -492,7 +494,7 @@ export const mockApi: CityApi = {
       events: [net >= 0 ? `年度结余 ${net} 元` : `年度赤字 ${-net} 元`],
     });
     emit(c, "tick", d);
-    return { cityYear: c.cityYear, metrics: c.metrics, phase: c.phase };
+    return { cityYear: c.cityYear, metrics: c.metrics, phase: "building" };
   },
 
   async project(id) {
