@@ -13,11 +13,24 @@ SIM_CONFIG_PATH = Path(__file__).resolve().parent.parent / "sim-config.yaml"
 
 
 class Settings(BaseSettings):
-    """进程级环境变量配置。"""
+    """进程级环境变量配置。
+
+    LLM 走 OpenAI 兼容抽象（04 §7）：默认 DeepSeek 端点，可用环境变量切到
+    Qwen/Kimi/GLM 或本地 Ollama/vLLM；三角色可分别路由模型（CITY20_LLM_MODEL_NEWS 等）。
+    """
 
     model_config = SettingsConfigDict(env_prefix="CITY20_")
 
     app_version: str = "0.1.0"
+    llm_api_key: str | None = None  # 不配 key → 全模板降级（验收项）
+    llm_base_url: str = "https://api.deepseek.com/v1"
+    llm_model: str = "deepseek-chat"
+    llm_model_news: str | None = None
+    llm_model_citizen: str | None = None
+    llm_model_mentor: str | None = None
+    llm_timeout_short: float = 8.0  # news/citizen（04 §7）
+    llm_timeout_long: float = 20.0  # mentor/report（04 §7）
+    llm_max_concurrent: int = 3  # 单局峰值约 3 并发，超队列直接丢弃降级（04 §7）
 
 
 class GenerationConfig(BaseModel):
