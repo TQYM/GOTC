@@ -50,6 +50,23 @@ class EconomyConfig(BaseModel):
     projection_years: int = Field(ge=1)
 
 
+class ResidentialConfig(BaseModel):
+    """03 §8 住宅容量（人/座）。"""
+
+    capacity_res_low: int = Field(ge=0)
+    capacity_res_mid: int = Field(ge=0)
+    capacity_res_high: int = Field(ge=0)
+
+
+class EmploymentConfig(BaseModel):
+    """03 §8 岗位数（岗/座）。"""
+
+    jobs_shop: int = Field(ge=0)
+    jobs_cbd: int = Field(ge=0)
+    jobs_light: int = Field(ge=0)
+    jobs_heavy: int = Field(ge=0)
+
+
 class SimConfig(BaseModel):
     """03 §8 参数表。"""
 
@@ -57,6 +74,8 @@ class SimConfig(BaseModel):
     cell_size_m: int = Field(default=50, ge=1)
     generation: GenerationConfig
     economy: EconomyConfig
+    residential: ResidentialConfig
+    employment: EmploymentConfig
     briefing_template: str
 
 
