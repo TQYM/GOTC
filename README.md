@@ -12,7 +12,7 @@
 |---|---|---|
 | TQYM | [@TQYM](https://github.com/TQYM) | 项目负责 / 架构 / 规划文档 |
 | IGNG | [@IGNGserver](https://github.com/IGNGserver) | **后端全部**：sim 引擎 / AI 编排 / SSE / 契约模型 |
-| 慧慧 | [@HuiHuiya](https://github.com/HuiHuiya) | **前端全部**：Canvas 沙盘 / 拖拽交互 / 信息流 / 报告页 |
+| 灰灰 | [@HuiHuiya](https://github.com/HuiHuiya) | **前端全部**：Canvas 沙盘 / 拖拽交互 / 信息流 / 报告页 |
 
 ## 仓库结构
 
