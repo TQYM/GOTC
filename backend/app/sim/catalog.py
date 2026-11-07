@@ -64,20 +64,29 @@ def placement_cost(tile_type: TileType, cells: list[list[int]], terrain) -> int:
     return (spec.cost * (2 * flat_n + 3 * hill_n)) // (2 * n)
 
 
-def bridge_cells(parcel, anchor: list[int]) -> list[list[int]]:
-    """跨河桥展开（01 §3：1×N，N=跨河最短连续格数）。
+def bridge_cells(
+    parcel, anchor: list[int], orientation: str
+) -> list[list[int]]:
+    """跨河桥展开（01 §3）：西/北侧 bank 锚点，1×N 且包含两岸。
 
-    锚点必须落在 river 格；沿该行向两侧扩展覆盖整段连续河道。
-    锚点非河道或越界时抛 ValueError，由会话层转 invalid_placement。
+    水平桥向东、垂直桥向南，中间必须至少经过一格连续 river；任一
+    非河道格提前出现、缺少对岸 bank 或越界都使整次放置失败。
     """
+    if orientation not in ("horizontal", "vertical"):
+        raise ValueError("跨河桥必须指定 horizontal/vertical 方向")
     r, c = anchor
     size = parcel.size
-    if not (0 <= r < size and 0 <= c < size) or parcel.terrain[r][c] is not Terrain.RIVER:
-        raise ValueError("跨河桥锚点必须落在河道格上")
-    left = c
-    while left - 1 >= 0 and parcel.terrain[r][left - 1] is Terrain.RIVER:
-        left -= 1
-    right = c
-    while right + 1 < size and parcel.terrain[r][right + 1] is Terrain.RIVER:
-        right += 1
-    return [[r, cc] for cc in range(left, right + 1)]
+    if not (0 <= r < size and 0 <= c < size) or parcel.terrain[r][c] is not Terrain.BANK:
+        raise ValueError("跨河桥锚点必须落在西侧或北侧河岸格上")
+    dr, dc = (0, 1) if orientation == "horizontal" else (1, 0)
+    cells = [[r, c]]
+    r, c = r + dr, c + dc
+    while 0 <= r < size and 0 <= c < size and parcel.terrain[r][c] is Terrain.RIVER:
+        cells.append([r, c])
+        r, c = r + dr, c + dc
+    if len(cells) == 1:
+        raise ValueError("跨河桥必须至少覆盖一格河道")
+    if not (0 <= r < size and 0 <= c < size) or parcel.terrain[r][c] is not Terrain.BANK:
+        raise ValueError("跨河桥必须连续跨河并连接另一侧河岸")
+    cells.append([r, c])
+    return cells

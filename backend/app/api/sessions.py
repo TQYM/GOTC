@@ -92,7 +92,9 @@ async def place(
 ) -> PlaceResult:
     async with session.lock:
         before = session.metrics
-        tile, metrics, diff, funds_after = session.place(body.type, body.anchor)
+        tile, metrics, diff, funds_after = session.place(
+            body.type, body.anchor, orientation=body.orientation
+        )
     schedule_news(session, before, metrics, body.type.value, narrator, body.anchor)
     return PlaceResult(tile=tile, metrics=metrics, metrics_diff=diff, funds_after=funds_after)
 

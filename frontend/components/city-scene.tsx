@@ -7,14 +7,17 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Object3D } from "three";
 import type { InstancedMesh, Mesh, MeshBasicMaterial } from "three";
 import {
+  bridgePlacementCells,
   cellToWorld,
+  createExistingAssetChunks,
   createExistingBuildingGeometries,
   createNetworkGeometries,
   createTerrainGeometries,
-  flattenActiveAssets,
   getCellBounds,
   getPlacementCells,
   getTileSpan,
+  getVisibleChunkKeys,
+  mergeExistingBuildingLayers,
   terrainHeight,
   worldToCell,
 } from "../lib/scene";
@@ -39,6 +42,7 @@ export interface CitySceneProps {
   networkUrl: string | null;
   tool: Tool;
   selectedType: TileType;
+  orientation?: "horizontal" | "vertical";
   onCellAction: (anchor: Anchor) => void;
   pulse?: { seq: number; anchor: Anchor } | null;
 }
@@ -136,11 +140,65 @@ const EXISTING_COLORS: Record<ExistingAsset["category"], string> = {
   civic: "#ddd9d1",
 };
 
-function ExistingBuildings({ assets, worldSize }: { assets: ExistingAsset[]; worldSize: number }) {
-  const buildings = useMemo(
-    () => createExistingBuildingGeometries(assets, worldSize),
-    [assets, worldSize],
+interface ExistingBuildingsProps {
+  file: BuildingsFile;
+  redevelopedAssetIds: string[];
+  worldSize: number;
+  cellSize: number;
+}
+
+function ExistingBuildings({
+  file,
+  redevelopedAssetIds,
+  worldSize,
+  cellSize,
+}: ExistingBuildingsProps) {
+  const chunks = useMemo(
+    () => createExistingAssetChunks(file, redevelopedAssetIds, worldSize),
+    [file, redevelopedAssetIds, worldSize],
   );
+  const [visibleKeys, setVisibleKeys] = useState<string[]>([]);
+  const lastVisibilityCheck = useRef(-Infinity);
+  // Data packs use 8×8-cell chunks: preload a one-chunk ring around the frustum.
+  const neighborMargin = cellSize * 8;
+
+  useFrame(({ camera, clock }) => {
+    if (clock.elapsedTime - lastVisibilityCheck.current < 0.12) return;
+    lastVisibilityCheck.current = clock.elapsedTime;
+    const next = getVisibleChunkKeys(chunks, camera, neighborMargin);
+    setVisibleKeys((previous) => (
+      previous.length === next.length && previous.every((key, index) => key === next[index])
+        ? previous
+        : next
+    ));
+  });
+
+  // A new cache per file/redevelopment revision avoids stale cleanup disposing new entries.
+  const geometryCache = useMemo(
+    () => new Map<string, ReturnType<typeof createExistingBuildingGeometries>>(),
+    [chunks, worldSize],
+  );
+  useEffect(() => () => {
+    for (const layers of geometryCache.values()) {
+      for (const layer of layers) layer.geometry.dispose();
+    }
+    geometryCache.clear();
+  }, [geometryCache]);
+
+  const buildings = useMemo(() => {
+    const visible = new Set(visibleKeys);
+    const visibleLayers = [];
+    for (const chunk of chunks) {
+      if (!visible.has(chunk.key)) continue;
+      let layers = geometryCache.get(chunk.key);
+      if (!layers) {
+        layers = createExistingBuildingGeometries(chunk.assets, worldSize);
+        geometryCache.set(chunk.key, layers);
+      }
+      visibleLayers.push(layers);
+    }
+    return mergeExistingBuildingLayers(visibleLayers);
+  }, [chunks, geometryCache, visibleKeys, worldSize]);
   useEffect(() => () => {
     for (const building of buildings) building.geometry.dispose();
   }, [buildings]);
@@ -166,14 +224,27 @@ function NetworkLayer({ file, worldSize }: { file: NetworkFile; worldSize: numbe
   return (
     <group>
       {geometries.roads && (
-        <lineSegments geometry={geometries.roads} renderOrder={2}>
-          <lineBasicMaterial color="#59636b" transparent opacity={0.9} toneMapped={false} />
-        </lineSegments>
+        <mesh geometry={geometries.roads} renderOrder={2}>
+          <meshStandardMaterial
+            color="#59636b"
+            roughness={0.92}
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-1}
+          />
+        </mesh>
       )}
       {geometries.rails && (
-        <lineSegments geometry={geometries.rails} renderOrder={2}>
-          <lineBasicMaterial color="#4f8edc" transparent opacity={0.95} toneMapped={false} />
-        </lineSegments>
+        <mesh geometry={geometries.rails} renderOrder={2}>
+          <meshStandardMaterial
+            color="#4f8edc"
+            roughness={0.72}
+            metalness={0.08}
+            polygonOffset
+            polygonOffsetFactor={-2}
+            polygonOffsetUnits={-2}
+          />
+        </mesh>
       )}
     </group>
   );
@@ -320,7 +391,7 @@ function isPlacementValid(
   cells: Anchor[],
   occupiedCells: ReadonlySet<string>,
 ): boolean {
-  return cells.every((anchor) => (
+  return cells.length > 0 && cells.every((anchor) => (
     cellToWorld(anchor, parcel.size, parcel.cell_size_m) !== null &&
     !occupiedCells.has(anchorKey(anchor)) &&
     terrainAllows(type, terrainAt(parcel, anchor))
@@ -331,15 +402,26 @@ interface PlacementGhostProps {
   parcel: Parcel;
   anchor: Anchor;
   type: TileType;
+  orientation: "horizontal" | "vertical";
   valid: boolean;
 }
 
-function PlacementGhost({ parcel, anchor, type, valid }: PlacementGhostProps) {
-  const span = getTileSpan(type);
+function PlacementGhost({ parcel, anchor, type, orientation, valid }: PlacementGhostProps) {
   const cellSize = parcel.cell_size_m;
   const half = (parcel.size * cellSize) / 2;
   const style = TILE_STYLES[type];
-  const cells = getPlacementCells(anchor, type);
+  const cells = type === "util_bridge"
+    ? bridgePlacementCells(parcel, anchor, orientation)
+    : getPlacementCells(anchor, type);
+  const bridgeBounds = type === "util_bridge" ? getCellBounds(cells, parcel.size) : null;
+  const span = bridgeBounds
+    ? {
+      rows: bridgeBounds.maxRow - bridgeBounds.minRow + 1,
+      columns: bridgeBounds.maxColumn - bridgeBounds.minColumn + 1,
+    }
+    : getTileSpan(type);
+  const startRow = bridgeBounds?.minRow ?? anchor[0];
+  const startColumn = bridgeBounds?.minColumn ?? anchor[1];
   let elevation = terrainHeight(terrainAt(parcel, anchor));
   for (const cell of cells) {
     if (cellToWorld(cell, parcel.size, cellSize)) {
@@ -351,9 +433,9 @@ function PlacementGhost({ parcel, anchor, type, valid }: PlacementGhostProps) {
   return (
     <mesh
       position={[
-        (anchor[1] + span.columns / 2) * cellSize - half,
+        (startColumn + span.columns / 2) * cellSize - half,
         elevation + style.height / 2 + 0.12,
-        (anchor[0] + span.rows / 2) * cellSize - half,
+        (startRow + span.rows / 2) * cellSize - half,
       ]}
       scale={[span.columns * cellSize * 0.86, Math.max(0.5, style.height), span.rows * cellSize * 0.86]}
       renderOrder={10}
@@ -442,6 +524,7 @@ export function CityScene({
   networkUrl,
   tool,
   selectedType,
+  orientation = "horizontal",
   onCellAction,
   pulse = null,
 }: CitySceneProps) {
@@ -449,18 +532,16 @@ export function CityScene({
   const buildings = useRemoteFile<BuildingsFile>(buildingsUrl);
   const network = useRemoteFile<NetworkFile>(networkUrl);
   const worldSize = parcel.size * parcel.cell_size_m;
-  const activeAssets = useMemo(
-    () => flattenActiveAssets(buildings.data, redevelopedAssetIds),
-    [buildings.data, redevelopedAssetIds],
-  );
   const occupiedCells = useMemo(
     () => new Set(tiles.flatMap((tile) => tile.cells.map(anchorKey))),
     [tiles],
   );
-  const placementCells = useMemo(
-    () => hovered && tool === "place" ? getPlacementCells(hovered, selectedType) : [],
-    [hovered, selectedType, tool],
-  );
+  const placementCells = useMemo(() => {
+    if (!hovered || tool !== "place") return [];
+    return selectedType === "util_bridge"
+      ? bridgePlacementCells(parcel, hovered, orientation)
+      : getPlacementCells(hovered, selectedType);
+  }, [hovered, orientation, parcel, selectedType, tool]);
   const placementValid = hovered !== null && isPlacementValid(
     parcel,
     selectedType,
@@ -477,7 +558,9 @@ export function CityScene({
     const anchor = worldToCell(point[0], point[1], parcel.size, parcel.cell_size_m);
     if (!anchor) return;
     if (tool === "place") {
-      const cells = getPlacementCells(anchor, selectedType);
+      const cells = selectedType === "util_bridge"
+        ? bridgePlacementCells(parcel, anchor, orientation)
+        : getPlacementCells(anchor, selectedType);
       if (!isPlacementValid(parcel, selectedType, cells, occupiedCells)) return;
     }
     onCellAction(anchor);
@@ -514,12 +597,25 @@ export function CityScene({
           <meshStandardMaterial color="#87988b" roughness={1} />
         </mesh>
         <TerrainLayer parcel={parcel} onHover={hover} onLeave={() => setHovered(null)} onSelect={select} />
-        {buildings.data && <ExistingBuildings assets={activeAssets} worldSize={worldSize} />}
+        {buildings.data && (
+          <ExistingBuildings
+            file={buildings.data}
+            redevelopedAssetIds={redevelopedAssetIds}
+            worldSize={worldSize}
+            cellSize={parcel.cell_size_m}
+          />
+        )}
         {network.data && <NetworkLayer file={network.data} worldSize={worldSize} />}
         <PlayerTiles parcel={parcel} tiles={tiles} />
 
         {hovered && tool === "place" && (
-          <PlacementGhost parcel={parcel} anchor={hovered} type={selectedType} valid={placementValid} />
+          <PlacementGhost
+            parcel={parcel}
+            anchor={hovered}
+            type={selectedType}
+            orientation={orientation}
+            valid={placementValid}
+          />
         )}
         {hovered && tool !== "place" && <CellCursor parcel={parcel} anchor={hovered} tool={tool} />}
         {pulse && (

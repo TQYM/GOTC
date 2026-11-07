@@ -223,6 +223,7 @@ class SaveService:
             tile, _metrics, _diff, _funds = state.place(
                 TileType(payload["type"]),
                 payload["anchor"],
+                orientation=payload.get("orientation"),
                 tile_id=f"tile_{seq:08d}",
             )
             return tile, [], None

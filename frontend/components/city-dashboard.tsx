@@ -122,7 +122,7 @@ export default function CityDashboard() {
           redevelopedAssetIds={state.redeveloped_asset_ids}
           buildingsUrl={resolveAssetUrl(state.parcel.buildings_url)}
           networkUrl={resolveAssetUrl(state.parcel.network_url)}
-          tool={tool} selectedType={selectedType}
+          tool={tool} selectedType={selectedType} orientation={orientation}
           onCellAction={(anchor) => void cellAction(anchor)}
           pulse={city.store.pulse}
         />

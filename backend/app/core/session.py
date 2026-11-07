@@ -182,15 +182,22 @@ class GameSession:
     # ---- 操作 ----
 
     def place(
-        self, tile_type: TileType, anchor: list[int], *, tile_id: str | None = None
+        self,
+        tile_type: TileType,
+        anchor: list[int],
+        *,
+        orientation: str | None = None,
+        tile_id: str | None = None,
     ) -> tuple[Tile, Metrics, MetricsDiff, int]:
         self._touch()
         try:
             self._check_phase()
             if tile_type is TileType.UTIL_BRIDGE:
-                # 跨河桥特判（01 §3）：锚点必须在河道，覆盖整段连续河面，不做常用地形校验
+                # 跨河桥特判（01 §3）：西/北侧 bank 锚点，按方向覆盖河道与两岸。
+                if orientation is None:
+                    raise GameError(ErrorCode.INVALID_PLACEMENT, "跨河桥必须指定方向")
                 try:
-                    cells = bridge_cells(self.parcel, anchor)
+                    cells = bridge_cells(self.parcel, anchor, orientation)
                 except ValueError as exc:
                     raise GameError(ErrorCode.INVALID_PLACEMENT, str(exc)) from exc
                 taken = [[r, c] for r, c in cells if (r, c) in self.occupied]
@@ -212,16 +219,16 @@ class GameSession:
             self.parcel.terrain[r][c] is Terrain.FOREST for r, c in cells
         ):
             self.cleared_forest = True  # 铲森林 → 林地抗议入池（03 §7）
-        orientation = None
+        resolved_orientation = None
         if tile_type is TileType.UTIL_BRIDGE:
             # 02 §2.2：桥必带朝向；同行=horizontal，同列=vertical
-            orientation = "horizontal" if len({r for r, _ in cells}) == 1 else "vertical"
+            resolved_orientation = "horizontal" if len({r for r, _ in cells}) == 1 else "vertical"
         tile = Tile(
             id=tile_id or TILE_ID_PREFIX + secrets.token_hex(4),
             type=tile_type,
             anchor=list(anchor),
             cells=cells,
-            orientation=orientation,
+            orientation=resolved_orientation,
             built_at_year=self.at_year,
             upkeep=(
                 CATALOG[tile_type].upkeep * len(cells)  # 桥按格数计维护（03 §8 bridge 10k×N）
