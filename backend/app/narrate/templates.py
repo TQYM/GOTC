@@ -1,11 +1,12 @@
-"""降级模板槽位库（04 §6）：news / citizen / mentor / report 四组，全部纯规则。
+"""降级模板槽位库（04 §6）：news / citizen / mentor 三组，全部纯规则。
+
+report 组在 core/report.py（finalize 不依赖叙述层）。
 
 AI 成功用 AI 文案，失败/超时/解析失败一律落到这里；玩家体验差别只是文采。
 """
 
-from app.contracts.finalize import Ending, Scores
 from app.contracts.metrics import Metrics
-from app.core.personas import ENDING_NAMES, METRIC_NAMES, TILE_NAMES
+from app.core.personas import METRIC_NAMES, TILE_NAMES
 
 # ---- news（04 §6：【指标名】升至/降至【值】，主要受【区块类型】影响） ----
 
@@ -112,7 +113,7 @@ MENTOR_RULES = (
 MENTOR_DEFAULT = {
     "comment": "布局结构总体均衡，各项指标在合理区间。下一步可做小尺度织补，保持职住与配套同步。",
     "theory_refs": ["life_circle_15"],
-    "severity": "info",
+    "severity": "suggestion",
 }
 
 
@@ -132,67 +133,3 @@ def render_mentor_top3(metrics: Metrics) -> list[dict]:
         if condition(metrics)
     ]
     return issues[:3]
-
-
-# ---- report：三段式纯规则模板（400–700 字） ----
-
-_DIM_COMMENTS = {
-    "population": ("人口规模", "人口导入得力，城区人气足", "人口导入不足，需要完善居住与配套"),
-    "balance": ("职住平衡", "职住比例协调，通勤结构健康", "职住比例失衡，居住与就业应同步布局"),
-    "green": ("绿地系统", "绿地网络成型，生态本底良好", "绿地总量不足，应沿绿线补绿织网"),
-    "traffic": ("交通运行", "通勤与拥堵控制良好", "通勤与拥堵压力较大，需优化路网与轨道"),
-    "happiness": ("居民幸福", "居民满意度高", "居民满意度偏低，需从绿地通勤污染入手"),
-}
-
-_ENDING_STORIES = {
-    Ending.BANKRUPT: "十年后，财政收支失衡，维护费压垮了账面。"
-        "城市不是一天衰败的：早年重资产上马、税收培育不足，现金流年复一年失血。若重来一次，应先轻后重，用住宅与商业滚动积累，再上大项目。",
-    Ending.ECO_PARADISE: "十年后，这里成了远近闻名的生态乌托邦。绿道成网、河道清澈，"
-        "没有工业烟尘，居民推窗见绿。"
-        "城市证明了另一种发展观：把自然当本金而非成本，宜居本身就是最持久的竞争力。",
-    Ending.GRIDLOCK: "十年后，早晚高峰成了市民的集体记忆。道路负荷连年超载，通勤时间居高不下。"
-        "城市并未停止生长，只是生长的速度超过了血管的承受力。若重来一次，轨道与职住应先行一步。",
-    Ending.GHOST_TOWN: "十年后，楼宇依旧，人烟稀薄。规划容量远超真实入住，商铺关门、楼道空寂。"
-        "空城的出现从不是偶然：缺乏就业与配套的房子，终究只是钢筋水泥。若重来一次，先把岗位和服务做扎实。",
-    Ending.THRIVING: "十年后，这座城成为教科书里的明日之城：职住平衡、通勤顺畅、幸福度高企。"
-        "它的成功没有秘密——住宅、就业、公共服务与绿地在每一年都保持了同步的节奏。规划的价值，正在于此。",
-    Ending.ORDINARY: "十年后，这座城平淡地运转着：没有亮眼的奇迹，也没有失控的危机。"
-        "它是千百万普通城市的缩影，各项指标差强人意。若重来一次，在绿地、通勤与职住之间再精细一些，平凡也能走向优秀。",
-}
-
-
-def render_report(metrics: Metrics, scores: Scores, ending: Ending) -> str:
-    """三段式：总体诊断 → 五维逐项点评 → 结局故事。400–700 字。"""
-    para1 = (
-        f"【总体诊断】这座城市以{metrics.population}人、{metrics.jobs}个岗位的规模走完推演，"
-        f"期末财政{metrics.funds}元，年税收{metrics.tax_income}元、年维护{metrics.upkeep}元。"
-        f"绿地率{metrics.green_ratio:.2f}，平均通勤{metrics.avg_commute}分钟，"
-        f"拥堵指数{metrics.congestion:.2f}，污染指数{metrics.pollution:.2f}，"
-        f"幸福度{metrics.happiness}分，职住比{metrics.job_res_ratio:.2f}。"
-        f"教育覆盖率{metrics.coverage_edu:.0%}、医疗覆盖率{metrics.coverage_med:.0%}，"
-        f"地价指数{metrics.land_price_index:.1f}。"
-        "从账面到体感，这是一份可以被逐项复核的成绩单，每一分钱、每一分钟都来自模拟引擎的逐年推演。"
-    )
-    score_map = {
-        "population": scores.population,
-        "balance": scores.balance,
-        "green": scores.green,
-        "traffic": scores.traffic,
-        "happiness": scores.happiness,
-    }
-    parts = ["【五维点评】"]
-    for key, (label, good, bad) in _DIM_COMMENTS.items():
-        score = score_map[key]
-        verdict = good if score >= 60 else bad
-        parts.append(f"{label}{score}分：{verdict}。")
-    parts.append(
-        "五个维度相互牵制：人口带来税收也带来通勤，工业带来岗位也带来污染，"
-        "绿地看似不创收，却同时抬升幸福度与地价。优秀的规划不是单项冠军，而是让五根指针同向。"
-    )
-    para2 = "".join(parts)
-    para3 = (
-        f"【结局故事·{ENDING_NAMES[ending.value]}】"
-        + _ENDING_STORIES[ending]
-        + "本报告由规则模板生成；接入规划导师后，将以同样的三段式结构给出更细腻的叙事。"
-    )
-    return para1 + "\n" + para2 + "\n" + para3

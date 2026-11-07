@@ -1,10 +1,16 @@
-"""FastAPI 入口：挂路由、中间件、异常处理器（06 §2）。"""
+"""FastAPI 入口：挂路由、中间件、异常处理器（06 §2），规划导师 90s 调度（04 §4）。"""
+
+import asyncio
+import contextlib
+import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.api.sessions import get_registry
+from app.api.sessions import get_registry, narrator
 from app.api.sessions import router as sessions_router
 from app.api.stream import sse_endpoint
 from app.config import Settings
@@ -16,9 +22,36 @@ from app.contracts.errors import (
 )
 from app.core.errors import GameError
 
+log = logging.getLogger(__name__)
 settings = Settings()
 
-app = FastAPI(title="CITY20 Backend", version=settings.app_version)
+MENTOR_POLL_SEC = 5.0  # 调度循环粒度；90s 节流在 Narrator.mentor_comment
+
+
+async def _mentor_loop() -> None:
+    """规划导师定时点评：遍历活跃会话，90s 一条（core 不依赖 narrate，故放入口层）。"""
+    while True:
+        await asyncio.sleep(MENTOR_POLL_SEC)
+        for session in get_registry().active_sessions():
+            try:
+                await narrator.mentor_comment(session)
+            except Exception:  # 单会话失败不影响其他会话
+                log.exception("mentor comment failed: %s", session.session_id)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    task = asyncio.create_task(_mentor_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        get_registry().close()
+
+
+app = FastAPI(title="CITY20 Backend", version=settings.app_version, lifespan=lifespan)
 app.include_router(sessions_router)
 app.add_api_route(
     "/api/sessions/{session_id}/stream",
