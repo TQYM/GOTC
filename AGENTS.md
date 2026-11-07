@@ -5,7 +5,7 @@
 Collaboration: collaborative
 Baseline: main
 Default branch: main
-Release: 无（48 小时比赛项目，不发布安装包；演示按 `docs/plan/07-qa-ops.md` 本地启动）
+Release: Web 演示按 `docs/plan/07-qa-ops.md` 本地启动；macOS / Windows / Android / iOS 四端安装包按 `docs/plan/09-cross-platform.md`（M6 弹性交付，CI artifacts / 本地 Xcode）
 Validation: 前端 `cd frontend && npm ci && npm run lint && npm run build`；后端 `cd backend && pip install -e ".[dev]"`（无 pyproject 时 `pip install -r requirements.txt`）后 `ruff check . && pytest -q`。两侧均以存在依赖清单为前提，脚手架未落地时按 CI 的 detect 逻辑跳过；纯文档改动按设备级规范第 5 节的文档例外执行
 Worktree: `~/项目/.wt/城市模拟沙盘/<slug>`
 
@@ -44,4 +44,4 @@ CITY20：AI 驱动的城市规划模拟沙盘，单局硬上限 20 分钟。玩�
 
 ## 范围边界（不做）
 
-用户账号、持久化数据库、多人协作/对战、真实 OSM 数据、移动端原生 App、音效音乐（PR-17 可选）。详见 `docs/plan/00-master.md`。
+用户账号、持久化数据库、多人协作/对战、真实 OSM 数据、原生界面重写（四端一律 Web 壳复用，见 `docs/plan/09-cross-platform.md`）、音效音乐（PR-17 可选）。详见 `docs/plan/00-master.md`。
