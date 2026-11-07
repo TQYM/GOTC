@@ -74,6 +74,53 @@ class Parts {
     return this.add(g, color, x, y + h / 2, z, Math.PI / 4);
   }
 
+  /** 横向楼层带（13 §1.2：立面用色块与线脚表达，高层 2–3 条） */
+  bands(
+    w: number,
+    d: number,
+    from: number,
+    to: number,
+    step: number,
+    color: string,
+    x = 0,
+    z = 0,
+  ) {
+    for (let y = from; y < to - 1; y += step)
+      this.slab(w * 1.04, 0.8, d * 1.04, color, x, y, z);
+    return this;
+  }
+
+  /** 双坡屋顶（三角棱柱，屋脊沿 x），底面落在 y */
+  gable(
+    len: number,
+    span: number,
+    h: number,
+    color: string,
+    x = 0,
+    y = 0,
+    z = 0,
+  ) {
+    const shape = new THREE.Shape();
+    shape.moveTo(-span / 2, 0);
+    shape.lineTo(span / 2, 0);
+    shape.lineTo(0, h);
+    shape.closePath();
+    const g = new THREE.ExtrudeGeometry(shape, {
+      depth: len,
+      bevelEnabled: false,
+    });
+    g.translate(0, 0, -len / 2);
+    g.rotateY(Math.PI / 2);
+    return this.add(g, color, x, y, z);
+  }
+
+  /** 椭圆地坪（操场跑道等），底面落在 y */
+  oval(rx: number, rz: number, h: number, color: string, x = 0, y = 0, z = 0) {
+    const g = new THREE.CylinderGeometry(rz, rz, h, 28);
+    g.scale(rx / rz, 1, 1);
+    return this.add(g, color, x, y + h / 2, z);
+  }
+
   /** 球冠树：树干 + 球状树冠 */
   tree(x: number, z: number, scale = 1, y = 0) {
     this.cylinder(1.2 * scale, 5 * scale, SCENE_COLORS.trunk, x, y, z, 6);
@@ -116,11 +163,13 @@ function make(type: TileType, s: number): THREE.BufferGeometry {
       break;
     case "res_mid":
       p.box(w * 0.9, 22, d * 0.9, base)
+        .bands(w * 0.9, d * 0.9, 7.5, 22, 7.5, lighten(base, 0.45))
         .slab(w * 0.94, 1.5, d * 0.94, lighten(base, 0.5), 0, 22)
         .box(8, 4, 8, lighten(base, 0.6), -w * 0.2, 23.5, -d * 0.2);
       break;
     case "res_high":
       p.box(w * 0.68, 58, d * 0.68, base)
+        .bands(w * 0.68, d * 0.68, 15, 58, 14.5, lighten(base, 0.45))
         .box(w * 0.74, 3, d * 0.74, lighten(base, 0.55), 0, 58)
         .box(w * 0.3, 5, d * 0.3, lighten(base, 0.7), 0, 61);
       break;
@@ -132,6 +181,7 @@ function make(type: TileType, s: number): THREE.BufferGeometry {
     case "com_cbd":
       p.box(w, 12, d, base)
         .box(w * 0.55, 82, d * 0.55, lighten(base, 0.25), 0, 12)
+        .bands(w * 0.55, d * 0.55, 34, 94, 20, lighten(base, 0.6))
         .box(w * 0.36, 7, d * 0.36, lighten(base, 0.6), 0, 94);
       break;
     case "ind_light":
@@ -165,10 +215,12 @@ function make(type: TileType, s: number): THREE.BufferGeometry {
         .tree(W * 0.32, D * 0.32, 1.3, 1);
       break;
     case "edu_school":
-      p.box(w, 15, d * 0.32, base, 0, 0, -d * 0.34)
-        .box(w * 0.32, 15, d * 0.5, base, -w * 0.34, 0, d * 0.08)
-        .slab(w * 0.56, 0.8, d * 0.5, "#e98b6d", w * 0.2, 0, d * 0.2)
-        .slab(w * 0.4, 0.9, d * 0.32, "#7fd18c", w * 0.2, 0, d * 0.2)
+      // 识别套件（13 §1.3）：L 形坡顶教学楼 + 红色塑胶跑道操场
+      p.box(w, 13, d * 0.3, base, 0, 0, -d * 0.35)
+        .gable(w, d * 0.3 + 2, 6, "#c0504d", 0, 13, -d * 0.35)
+        .box(w * 0.28, 13, d * 0.42, base, -w * 0.36, 0, d * 0.13)
+        .oval(w * 0.3, d * 0.22, 0.8, "#e0664f", w * 0.16, 0, d * 0.2)
+        .oval(w * 0.22, d * 0.14, 1, "#7fd18c", w * 0.16, 0, d * 0.2)
         .cylinder(0.6, 18, SCENE_COLORS.accentDark, w * 0.44, 0, -d * 0.08, 6)
         .slab(5, 3, 0.4, "#ff4d4f", w * 0.44 + 2.6, 15, -d * 0.08);
       break;

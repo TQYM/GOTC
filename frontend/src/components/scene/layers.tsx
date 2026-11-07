@@ -24,6 +24,13 @@ import { toonMaterial } from "./toon";
 
 const tmp = new THREE.Object3D();
 
+/** 13 §1.4：树冠 2–3 种绿色随机（实例色与模型顶点色相乘） */
+const TREE_TINTS = [
+  new THREE.Color("#ffffff"),
+  new THREE.Color("#c9ecc0"),
+  new THREE.Color("#e6f5b0"),
+];
+
 /* ------------------------------------------------------------------ 地形 */
 
 export interface PickHandlers {
@@ -149,8 +156,10 @@ export function ForestLayer({
       tmp.scale.setScalar(k);
       tmp.updateMatrix();
       mesh.setMatrixAt(i, tmp.matrix);
+      mesh.setColorAt(i, TREE_TINTS[i % TREE_TINTS.length]);
     });
     mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     mesh.computeBoundingSphere();
   }, [spots, g]);
 

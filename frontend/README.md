@@ -1,6 +1,6 @@
 # frontend/
 
-Next.js 前端：卡通风格 3D 城市沙盘（Three.js）+ 拖拽规划 + 三栏 AI 反馈流。规格见 [05-frontend](../docs/plan/05-frontend.md)、渲染层以 [11-real-beijing-3d](../docs/plan/11-real-beijing-3d.md) 为准，不限时与存档见 [10-persistence-sync](../docs/plan/10-persistence-sync.md)；唯一接口是 [02 契约](../docs/plan/02-data-contract.md)。
+Next.js 前端：卡通风格 3D 城市沙盘（Three.js）+ 拖拽规划 + 三栏 AI 反馈流。规格见 [05-frontend](../docs/plan/05-frontend.md)、渲染层以 [11-real-beijing-3d](../docs/plan/11-real-beijing-3d.md) 为准，美术与交互细化见 [13-refined-art-and-interaction](../docs/plan/13-refined-art-and-interaction.md)，不限时与存档见 [10-persistence-sync](../docs/plan/10-persistence-sync.md)；唯一接口是 [02 契约](../docs/plan/02-data-contract.md)。
 
 ## 技术栈
 
@@ -25,7 +25,8 @@ npm run build        # 生产构建（CI 强制）
 src/
 ├── app/                        # 路由：/（落地页）、/sandbox（3D 沙盘预览，mock 数据）
 ├── components/scene/
-│   ├── CityScene3D.tsx         # 场景入口：相机 + OrbitControls、光照/阴影、分层、性能探针
+│   ├── CityScene3D.tsx         # 场景入口：相机、光照/阴影、分层、性能探针
+│   ├── CameraRig.tsx           # 天际线式相机操控（13 §4.1）：右键旋转、中键/WASD 平移、滚轮向光标缩放、Home 复位
 │   ├── layers.tsx              # 地形 / 林木 / 既有建筑占位 / 玩家建筑（InstancedMesh）/ 悬停 / ghost
 │   ├── terrainGeometry.ts      # 48×48 地面单 mesh（顶点色 + 高差侧壁 + 底座）、水面、网格线
 │   ├── tileModels.ts           # 14 种区块程序化卡通模型（部件合并 + 顶点色）

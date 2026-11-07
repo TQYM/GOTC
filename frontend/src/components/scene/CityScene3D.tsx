@@ -3,7 +3,7 @@
 /**
  * CityScene3D（05 §2.3 / 11 §6）：卡通风格真 3D 沙盘。
  *
- * - 透视相机 + OrbitControls（旋转/缩放/平移；触屏单指旋转、双指缩放平移）；
+ * - 透视相机 + 天际线式操控（CameraRig：右键旋转、中键/WASD 平移、滚轮向光标缩放、Home 复位）；
  * - 米制局部坐标，片区中心为原点；
  * - 1 方向光 + 半球环境光，关闭色调映射（flat）保留卡通高饱和配色；
  * - 桌面开阴影，触屏设备关阴影并把像素比上限压到 1.5；
@@ -12,9 +12,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
 import type { Cell, Parcel, Tile } from "@/lib/contract";
 import { SCENE_COLORS } from "@/lib/palette";
+import CameraRig from "./CameraRig";
 import { cellToWorld, gridOf, TERRAIN_HEIGHT } from "./coords";
 import {
   ForestLayer,
@@ -45,6 +45,8 @@ export interface CityScene3DProps {
   onStats?: (s: SceneStats) => void;
   /** 强制开关阴影；缺省按设备（触屏关） */
   shadows?: boolean;
+  /** 值变化时相机回到默认鸟瞰 */
+  resetViewSignal?: number;
   /** 暴露 window.__city20Scene 供 E2E 拾取校验 */
   debugHook?: boolean;
   className?: string;
@@ -114,6 +116,7 @@ export default function CityScene3D({
   onCellClick,
   onStats,
   shadows,
+  resetViewSignal = 0,
   debugHook = false,
   className,
 }: CityScene3DProps) {
@@ -193,16 +196,10 @@ export default function CityScene3D({
         <HoverFrame parcel={parcel} cell={ghost ? null : hover} />
         <GhostLayer parcel={parcel} ghost={ghost} />
 
-        <OrbitControls
-          makeDefault
-          target={[0, 0, 0]}
-          enableDamping
-          dampingFactor={0.12}
-          minDistance={extent * 0.12}
-          maxDistance={extent * 2.4}
-          minPolarAngle={0.15}
-          maxPolarAngle={1.32}
-          screenSpacePanning={false}
+        <CameraRig
+          extent={extent}
+          home={camPos}
+          resetSignal={resetViewSignal}
         />
         {onStats && <StatsProbe onStats={onStats} />}
         {debugHook && <DebugHook parcel={parcel} />}

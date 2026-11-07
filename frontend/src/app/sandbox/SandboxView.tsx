@@ -52,6 +52,7 @@ export default function SandboxView() {
   const [tool, setTool] = useState<TileType | "">("");
   const [hover, setHover] = useState<Cell | null>(null);
   const [stats, setStats] = useState<SceneStats | null>(null);
+  const [resetView, setResetView] = useState(0);
 
   const shownTiles = useMemo(
     () => (showTiles ? tiles : []),
@@ -101,6 +102,7 @@ export default function SandboxView() {
           shadows={shadows}
           onCellHover={setHover}
           onStats={onStats}
+          resetViewSignal={resetView}
           debugHook
         />
       </section>
@@ -114,7 +116,7 @@ export default function SandboxView() {
             {parcel.constraints.briefing.text}
           </p>
           <p className="mt-1 text-xs text-fg-muted">
-            左键拖动旋转 · 右键拖动平移 · 滚轮缩放
+            右键拖动旋转 · 中键 / WASD 平移 · 滚轮向光标缩放 · Home 回到全景
           </p>
         </div>
 
@@ -147,6 +149,14 @@ export default function SandboxView() {
             ))}
           </select>
         </label>
+
+        <button
+          type="button"
+          onClick={() => setResetView((n) => n + 1)}
+          className="self-start rounded border border-line px-2 py-1 hover:bg-line"
+        >
+          回到全景（Home）
+        </button>
 
         <div className="space-y-1">
           <label className="flex items-center gap-2">
