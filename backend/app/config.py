@@ -39,12 +39,24 @@ class GenerationConfig(BaseModel):
     green_line_m: int = Field(ge=0)
 
 
+class EconomyConfig(BaseModel):
+    """03 §8 经济与阶段参数。"""
+
+    initial_funds: int = Field(ge=0)
+    demolish_refund: float = Field(ge=0.0, le=1.0)
+    build_minutes: int = Field(ge=1)
+    polish_minutes: int = Field(ge=1)
+    briefing_sec: int = Field(ge=1)
+    projection_years: int = Field(ge=1)
+
+
 class SimConfig(BaseModel):
-    """03 §8 参数表（当前含生成参数，经济参数随 PR-06 加入）。"""
+    """03 §8 参数表。"""
 
     grid_size: int = Field(default=48, ge=1)
     cell_size_m: int = Field(default=50, ge=1)
     generation: GenerationConfig
+    economy: EconomyConfig
     briefing_template: str
 
 
