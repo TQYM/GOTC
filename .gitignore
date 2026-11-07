@@ -68,3 +68,4 @@ tmp/
 *.onnx
 *.gguf
 assets/generated/
+tools/prepare-parcel/raw/

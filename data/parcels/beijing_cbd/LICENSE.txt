@@ -1,0 +1,6 @@
+本数据包由 OpenStreetMap 数据加工而成（道路/水系/绿地/地名/重点地标轮廓为真实数据；
+功能性建筑保留真实位置与名称，外观为程序生成体块；普通建筑为扩散算法生成）。
+© OpenStreetMap contributors（https://www.openstreetmap.org/copyright）
+原始数据许可：Open Database License (ODbL) 1.0（https://opendatacommons.org/licenses/odbl/1-0/）
+本衍生数据包同样以 ODbL 1.0 共享。使用与再分发须保留本署名。
+数据来源：Overpass API（overpass-api.de / overpass.private.coffee），提取范围见 parcel.json。
