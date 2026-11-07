@@ -389,8 +389,18 @@ class TestFinalize:
             {
                 "phase": "locked",
                 "projection": [
-                    {"year": 4, "metrics": metrics, "events": ["人口流入放缓"], "source": "template"},
-                    {"year": 5, "metrics": metrics, "events": ["cbd地价上涨12%"], "source": "template"},
+                    {
+                        "year": 4,
+                        "metrics": metrics,
+                        "events": ["人口流入放缓"],
+                        "source": "template",
+                    },
+                    {
+                        "year": 5,
+                        "metrics": metrics,
+                        "events": ["cbd地价上涨12%"],
+                        "source": "template",
+                    },
                 ],
                 "ending": "thriving",
                 "scores": {

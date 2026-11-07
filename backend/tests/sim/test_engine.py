@@ -33,7 +33,10 @@ def flat_parcel(hills: list[tuple[int, int]] | None = None) -> Parcel:
         terrain=terrain,
         inherited_road=[],
         constraints=ParcelConstraints(
-            height_limit_m=80, green_line_m=30, buildable_ratio=1.0, briefing="t"
+            height_limit_m=80,
+            green_line_m=30,
+            buildable_ratio=1.0,
+            briefing={"text": "t", "source": "template"},
         ),
     )
 

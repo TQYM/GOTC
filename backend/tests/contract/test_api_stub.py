@@ -213,7 +213,8 @@ class TestAdvanceFinalize:
         assert data["phase"] == "locked"
         assert len(data["projection"]) == 10
         assert set(data["scores"]) == {"population", "balance", "green", "traffic", "happiness"}
-        assert data["report_text"]
+        assert data["report"]["overview"]
+        assert data["city_name"]
 
     def test_finalize_idempotent(self, client):
         sid = create(client)["session_id"]

@@ -10,7 +10,9 @@ import time
 from dataclasses import dataclass, field
 
 from app.config import SimConfig
+from app.contracts.common import Source
 from app.contracts.errors import ErrorCode
+from app.contracts.events import Report, ReportDimensions
 from app.contracts.finalize import FinalizeResult
 from app.contracts.metrics import Metrics, MetricsDiff, Phase
 from app.contracts.parcel import Parcel, Terrain
@@ -21,6 +23,7 @@ from app.sim.catalog import CATALOG, GREEN_TYPES, bridge_cells, expand_cells, pl
 from app.sim.events import modifier_for, roll_event
 from app.sim.projection import run_projection
 
+CITY_NAMES = ("江湾市", "云州市", "临川市", "南星市", "北湾市", "青梧市")
 TILE_ID_PREFIX = "tile_"
 # 放置校验允许的地形（01 §2）；bank 仅绿地类区块可放；forest 视为可建设（铲除触发抗议，03 §7）
 _BUILDABLE = {Terrain.FLAT, Terrain.HILL, Terrain.FOREST}
@@ -41,6 +44,7 @@ class GameSession:
     metrics: Metrics | None = None
     finalized: bool = False
     finalize_result: FinalizeResult | None = None
+    projection_published_year: int = 0  # 02 §3.2：SSE 已播放到第几年（PR-13 推进）
     at_year: int = 1
     cleared_forest: bool = False  # 铲过森林 → 林地抗议入事件池（03 §7）
     current_event: str | None = None  # 当年环境事件（03 §7，一年期）
@@ -172,11 +176,16 @@ class GameSession:
             self.parcel.terrain[r][c] is Terrain.FOREST for r, c in cells
         ):
             self.cleared_forest = True  # 铲森林 → 林地抗议入池（03 §7）
+        orientation = None
+        if tile_type is TileType.UTIL_BRIDGE:
+            # 02 §2.2：桥必带朝向；同行=horizontal，同列=vertical
+            orientation = "horizontal" if len({r for r, _ in cells}) == 1 else "vertical"
         tile = Tile(
             id=TILE_ID_PREFIX + secrets.token_hex(4),
             type=tile_type,
             anchor=list(anchor),
             cells=cells,
+            orientation=orientation,
             built_at_year=self.at_year,
             upkeep=(
                 CATALOG[tile_type].upkeep * len(cells)  # 桥按格数计维护（03 §8 bridge 10k×N）
@@ -246,12 +255,27 @@ class GameSession:
             start_year=self.at_year,
             cleared_forest=self.cleared_forest,
         )
+        city_name = CITY_NAMES[self.parcel.seed % len(CITY_NAMES)]
+        report = Report(  # PR-12 换规划导师完整三段式（AI 可改写并标 source=ai）
+            overview=f"{city_name}走过了十个年头。总体诊断详版由规划导师在 PR-12 生成。",
+            dimensions=ReportDimensions(
+                population=f"人口 {outcome.projection[-1].metrics.population}。",
+                balance=f"职住比 {outcome.projection[-1].metrics.job_res_ratio}。",
+                green=f"绿地率 {outcome.projection[-1].metrics.green_ratio:.0%}。",
+                traffic=f"平均通勤 {outcome.projection[-1].metrics.avg_commute} 分钟。",
+                happiness=f"幸福度 {outcome.projection[-1].metrics.happiness}。",
+            ),
+            ending_story=f"结局：{outcome.ending.value}。完整故事由规划导师在 PR-12 生成。",
+            source=Source.TEMPLATE,
+        )
         self.finalize_result = FinalizeResult(
             phase=Phase.LOCKED,
             projection=outcome.projection,
             ending=outcome.ending,
             scores=outcome.scores,
-            report_text="（桩）推演报告文案占位：PR-12 接入规划导师叙事。",
+            report=report,
+            city_name=city_name,
+            city_name_source=Source.TEMPLATE,
         )
         self.finalized = True
         self._log_event("finalize", self.finalize_result.model_dump(mode="json"))

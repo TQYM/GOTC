@@ -9,6 +9,7 @@ from fastapi import Depends
 from sse_starlette.sse import EventSourceResponse
 
 from app.api.sessions import get_session
+from app.contracts.common import Source
 from app.contracts.events import (
     CitizenEvent,
     CitizenSentiment,
@@ -29,6 +30,7 @@ _STUB_EVENTS = [
         "news",
         NewsEvent(
             headline="（桩）城市电台开播",
+            source=Source.TEMPLATE,
             body="数据大脑接入中，当前为假数据流。",
             severity=NewsSeverity.INFO,
             at_year=1,
@@ -39,6 +41,7 @@ _STUB_EVENTS = [
         CitizenEvent(
             persona="程序员小李",
             text="（桩）沙盘就位，等市长开工。",
+            source=Source.TEMPLATE,
             sentiment=CitizenSentiment.NEUTRAL,
             topic=CitizenTopic.COMMUTE,
         ),
@@ -47,6 +50,7 @@ _STUB_EVENTS = [
         "mentor",
         MentorEvent(
             comment="（桩）先通后畅：路网骨架优先于单点地标。",
+            source=Source.TEMPLATE,
             theory_refs=[TheoryRef.ROAD_HIERARCHY],
             severity=MentorSeverity.SUGGESTION,
         ),

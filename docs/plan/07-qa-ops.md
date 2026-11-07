@@ -18,7 +18,7 @@
 - `.github/workflows/ci.yml` 检测式：frontend/ 有 package.json 才跑 lint+build，backend/ 有 pyproject.toml 才跑 ruff+pytest——**骨架未落地前全绿，永不误报**。
 - CI 还会始终执行 Markdown 相对链接检查；链接目标不存在时直接失败，避免规划文档引用漂移。
 - actions 版本已核查升级：actions/checkout v4→v5、actions/setup-node v4→v5（setup-python 已是 v5）。
-- 分支纪律照 [CONTRIBUTING.md](../CONTRIBUTING.md)：feat/xxx 当天合当天删；免审直通不等于免 CI。
+- 分支纪律照 [CONTRIBUTING.md](../../CONTRIBUTING.md)：feat/xxx 当天合当天删；免审直通不等于免 CI。
 
 ## 3. 本地运行与部署
 
