@@ -57,6 +57,27 @@ def placement_cost(tile_type: TileType, cells: list[list[int]], terrain) -> int:
     """
     spec = CATALOG[tile_type]
     n = len(cells)
+    if tile_type is TileType.UTIL_BRIDGE:
+        return spec.cost * n  # 桥按格计价（01 §3：200,000/格），无丘陵加成
     hill_n = sum(1 for r, c in cells if terrain[r][c] is Terrain.HILL)
     flat_n = n - hill_n
     return (spec.cost * (2 * flat_n + 3 * hill_n)) // (2 * n)
+
+
+def bridge_cells(parcel, anchor: list[int]) -> list[list[int]]:
+    """跨河桥展开（01 §3：1×N，N=跨河最短连续格数）。
+
+    锚点必须落在 river 格；沿该行向两侧扩展覆盖整段连续河道。
+    锚点非河道或越界时抛 ValueError，由会话层转 invalid_placement。
+    """
+    r, c = anchor
+    size = parcel.size
+    if not (0 <= r < size and 0 <= c < size) or parcel.terrain[r][c] is not Terrain.RIVER:
+        raise ValueError("跨河桥锚点必须落在河道格上")
+    left = c
+    while left - 1 >= 0 and parcel.terrain[r][left - 1] is Terrain.RIVER:
+        left -= 1
+    right = c
+    while right + 1 < size and parcel.terrain[r][right + 1] is Terrain.RIVER:
+        right += 1
+    return [[r, cc] for cc in range(left, right + 1)]

@@ -1,7 +1,7 @@
 """引擎门面（06 §2 / 03 §1）：每次操作后全量重算，输出 Metrics 与逐字段 diff。
 
-PR-06 覆盖 03 §4.1–4.6、4.11、4.12；avg_commute/congestion（PR-07）与
-pollution/happiness/coverage（PR-08）暂为占位值，由对应 PR 替换。
+PR-06 覆盖 03 §4.1–4.6、4.11、4.12；PR-07 接入交通（§4.7–4.8）；
+pollution/happiness/coverage（PR-08）暂为占位值。
 """
 
 from app.config import SimConfig
@@ -12,6 +12,7 @@ from app.sim.economy import job_res_ratio, jobs_of, tax_income, upkeep_of
 from app.sim.green import green_ratio
 from app.sim.landprice import land_price_index
 from app.sim.population import population_of, residential_stats
+from app.sim.traffic import compute_traffic
 
 # diff 不追踪的元信息字段（at_year/at_phase 由事件自身携带）
 _META_FIELDS = {"at_year", "at_phase"}
@@ -31,6 +32,7 @@ def recompute(
     population = population_of(stats)
     jobs = jobs_of(tiles, config)
     land_price = land_price_index(parcel, tiles, stats, config)
+    traffic = compute_traffic(parcel, tiles, stats, config)
     return Metrics(
         at_year=at_year,
         at_phase=at_phase,
@@ -40,8 +42,8 @@ def recompute(
         job_res_ratio=job_res_ratio(jobs, population),
         land_price_index=land_price,
         green_ratio=green_ratio(parcel, tiles),
-        avg_commute=0,  # PR-07
-        congestion=0.0,  # PR-07
+        avg_commute=traffic.avg_commute,
+        congestion=traffic.congestion,
         pollution=0.0,  # PR-08
         happiness=50,  # PR-08
         tax_income=tax_income(stats, jobs, land_price),

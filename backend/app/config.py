@@ -67,6 +67,20 @@ class EmploymentConfig(BaseModel):
     jobs_heavy: int = Field(ge=0)
 
 
+class TrafficConfig(BaseModel):
+    """03 §8 交通参数（BPR 等）。"""
+
+    bpr_alpha: float = Field(ge=0.0)
+    bpr_beta: float = Field(ge=0.0)
+    road_capacity: int = Field(ge=1)
+    highway_capacity: int = Field(ge=1)
+    base_road_time_min: float = Field(ge=0.0)
+    metro_fixed_commute_min: int = Field(ge=0)
+    metro_coverage_m: int = Field(default=600, ge=0)  # 「地铁沿线」半径实现口径（PR-07）
+    unreachable_penalty_min: int = Field(default=20, ge=0)  # 03 §4.7 不可达惩罚
+    unreachable_share_threshold: float = Field(default=0.05, ge=0.0, le=1.0)
+
+
 class SimConfig(BaseModel):
     """03 §8 参数表。"""
 
@@ -76,6 +90,7 @@ class SimConfig(BaseModel):
     economy: EconomyConfig
     residential: ResidentialConfig
     employment: EmploymentConfig
+    traffic: TrafficConfig
     briefing_template: str
 
 

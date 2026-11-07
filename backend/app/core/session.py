@@ -18,7 +18,7 @@ from app.contracts.parcel import Parcel, Terrain
 from app.contracts.tile import Tile, TileType
 from app.core.errors import GameError
 from app.sim import engine
-from app.sim.catalog import CATALOG, GREEN_TYPES, expand_cells, placement_cost
+from app.sim.catalog import CATALOG, GREEN_TYPES, bridge_cells, expand_cells, placement_cost
 
 TILE_ID_PREFIX = "tile_"
 # 放置校验允许的地形（01 §2）；bank 仅绿地类区块可放；forest 视为可建设（铲除触发抗议，03 §7）
@@ -133,8 +133,20 @@ class GameSession:
         self._touch()
         try:
             self._check_phase()
-            cells = expand_cells(tile_type, anchor)
-            self._check_cells_placeable(tile_type, cells)
+            if tile_type is TileType.UTIL_BRIDGE:
+                # 跨河桥特判（01 §3）：锚点必须在河道，覆盖整段连续河面，不做常用地形校验
+                try:
+                    cells = bridge_cells(self.parcel, anchor)
+                except ValueError as exc:
+                    raise GameError(ErrorCode.INVALID_PLACEMENT, str(exc)) from exc
+                taken = [[r, c] for r, c in cells if (r, c) in self.occupied]
+                if taken:
+                    raise GameError(
+                        ErrorCode.CELL_OCCUPIED, "桥位已被占用", details={"cells": taken}
+                    )
+            else:
+                cells = expand_cells(tile_type, anchor)
+                self._check_cells_placeable(tile_type, cells)
             cost = placement_cost(tile_type, cells, self.parcel.terrain)
             self._check_funds(cost)
         except GameError as exc:

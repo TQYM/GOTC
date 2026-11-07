@@ -42,4 +42,15 @@ employment:
   jobs_light: 900
   jobs_heavy: 2600
 
+traffic:
+  bpr_alpha: 0.15             # BPR 参数（03 §8，改动需在 PR 写明平衡性影响）
+  bpr_beta: 4
+  road_capacity: 800          # 普通道路格通行能力（需求/年）
+  highway_capacity: 1500      # 省道格通行能力
+  base_road_time_min: 0.5     # 格基准通行时间（分钟）
+  metro_fixed_commute_min: 8  # 地铁通勤固定值（含步行+候车）
+  metro_coverage_m: 600       # 「地铁沿线」实现半径（03 未定量，PR-07 取地价同口径 600m）
+  unreachable_penalty_min: 20 # 不可达比例超阈值时的通勤惩罚（03 §4.7）
+  unreachable_share_threshold: 0.05
+
 briefing_template: "本地块限高{height_limit_m}m，河道两侧{green_line_m}m绿线，省道保留不可拆。可建设率约{buildable_pct}%。"
