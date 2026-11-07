@@ -22,11 +22,13 @@ from app.contracts.tile import PlaceRequest, RemoveRequest
 from app.core.errors import GameError
 from app.core.session import GameSession
 from app.core.store import SessionRegistry
+from app.narrate.router import Narrator, schedule_news
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 # 单进程单实例（06 §3）；测试可直接替换此单例
 registry = SessionRegistry(load_sim_config())
+narrator = Narrator()  # 数据大脑（04 §2）；无 key 时全模板降级
 
 
 def get_registry() -> SessionRegistry:
@@ -80,7 +82,9 @@ async def place(
     session: Annotated[GameSession, Depends(get_session)],
 ) -> PlaceResult:
     async with session.lock:
+        before = session.metrics
         tile, metrics, diff, funds_after = session.place(body.type, body.anchor)
+    schedule_news(session, before, metrics, body.type.value, narrator)
     return PlaceResult(tile=tile, metrics=metrics, metrics_diff=diff, funds_after=funds_after)
 
 
@@ -90,7 +94,9 @@ async def remove(
     session: Annotated[GameSession, Depends(get_session)],
 ) -> RemoveResult:
     async with session.lock:
+        before = session.metrics
         tile, metrics, diff, funds_after = session.remove(body.tile_id)
+    schedule_news(session, before, metrics, tile.type.value, narrator)
     return RemoveResult(tile=tile, metrics=metrics, metrics_diff=diff, funds_after=funds_after)
 
 
