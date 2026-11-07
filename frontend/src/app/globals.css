@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+/* 05 §4：规划院蓝图 + 沙盘模型气质——深蓝灰底、等高线纹理 */
+:root {
+  --bg: #16202b;
+  --bg-elev: #1d2936;
+  --line: #2c3b4c;
+  --fg: #e6edf3;
+  --fg-muted: #93a4b6;
+  --accent: #5fb3f9;
+
+  --terrain-flat: #ece4d2;
+  --terrain-hill: #c4924f;
+  --terrain-river: #3a78b8;
+  --terrain-bank: #9cc6e2;
+  --terrain-forest: #2f6a3e;
+  --terrain-road: #8b9099;
+
+  --cat-residential: #f2c14e;
+  --cat-commercial: #d4a017;
+  --cat-industrial: #5b4b8a;
+  --cat-green: #3fb8a0;
+  --cat-service: #d9534f;
+  --cat-transport: #3b82f6;
+  --cat-utility: #9aa3ad;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elev: var(--bg-elev);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-accent: var(--accent);
+  --font-sans:
+    "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--bg);
+  /* 等高线纹理：两组错位的径向细环，纯 CSS，零资源 */
+  background-image:
+    repeating-radial-gradient(
+      circle at 18% 22%,
+      transparent 0 38px,
+      rgba(95, 179, 249, 0.05) 38px 39px
+    ),
+    repeating-radial-gradient(
+      circle at 82% 78%,
+      transparent 0 46px,
+      rgba(95, 179, 249, 0.04) 46px 47px
+    );
+  color: var(--fg);
+  font-family: var(--font-sans);
+}
