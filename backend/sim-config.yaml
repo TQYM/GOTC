@@ -1,0 +1,26 @@
+# CITY20 模拟参数唯一出处（03 §8）。调参只改这里，并同步更新 docs/plan/03-sim-engine.md 对应行。
+grid_size: 48
+cell_size_m: 50
+
+generation:
+  # 生成比例目标（01 §2 / 03 §2）；引擎只强制 buildable_ratio_min，其余为质量目标由测试守护
+  river_target_pct: [0.03, 0.05]
+  hill_target_pct: [0.08, 0.12]
+  forest_target_pct: [0.05, 0.08]
+  buildable_ratio_min: 0.70
+  max_regen_attempts: 20
+  # 河道：2–3 格宽随机游走带
+  river_width_min: 2
+  river_width_max: 3
+  # 丘陵：团簇数与椭圆半径（格）；生成后按目标区间补齐/修剪
+  hill_clusters: [2, 3]
+  hill_radius: [4, 6]
+  # 林地：片数与半径（格），优先贴河岸/丘陵边缘
+  forest_patches: [4, 6]
+  forest_radius: [2.5, 4]
+  forest_edge_bias: 0.6
+  # 开局简报约束（03 §2 步骤 8）
+  height_limit_m: [60, 100]
+  green_line_m: 30
+
+briefing_template: "本地块限高{height_limit_m}m，河道两侧{green_line_m}m绿线，省道保留不可拆。可建设率约{buildable_pct}%。"
