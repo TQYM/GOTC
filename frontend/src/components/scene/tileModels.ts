@@ -159,7 +159,7 @@ function make(type: TileType, s: number): THREE.BufferGeometry {
 
   switch (type) {
     case "res_low":
-      p.box(w * 0.8, 9, d * 0.8, base).hipRoof(w * 0.84, 7, "#F08A4B", 0, 9);
+      p.box(w * 0.8, 9, d * 0.8, base).hipRoof(w * 0.84, 7, "#E9A43B", 0, 9);
       break;
     case "res_mid":
       p.box(w * 0.9, 22, d * 0.9, base)

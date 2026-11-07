@@ -17,6 +17,7 @@ import { SCENE_COLORS } from "@/lib/palette";
 import CameraRig from "./CameraRig";
 import { cellToWorld, gridOf, TERRAIN_HEIGHT } from "./coords";
 import {
+  CellFrames,
   ForestLayer,
   GhostLayer,
   HoverFrame,
@@ -45,6 +46,12 @@ export interface CityScene3DProps {
   onStats?: (s: SceneStats) => void;
   /** 强制开关阴影；缺省按设备（触屏关） */
   shadows?: boolean;
+  /** 额外格框高亮（拆除模式选中的区块等） */
+  overlay?: { cells: Cell[]; color: string } | null;
+  /** 右键单击（无拖拽）：退出当前工具（13 §4.1） */
+  onRightClick?: () => void;
+  /** 画布光标样式（放置 / 拆除模式换光标） */
+  cursor?: string;
   /** 值变化时相机回到默认鸟瞰 */
   resetViewSignal?: number;
   /** 暴露 window.__city20Scene 供 E2E 拾取校验 */
@@ -117,9 +124,13 @@ export default function CityScene3D({
   onStats,
   shadows,
   resetViewSignal = 0,
+  overlay = null,
+  onRightClick,
+  cursor,
   debugHook = false,
   className,
 }: CityScene3DProps) {
+  const rightDown = useRef<[number, number] | null>(null);
   const coarse = useCoarsePointer();
   const shadowOn = shadows ?? !coarse;
   const [hover, setHover] = useState<Cell | null>(null);
@@ -155,6 +166,22 @@ export default function CityScene3D({
     <div
       className={`relative h-full w-full min-h-0 min-w-0 ${className ?? ""}`}
       data-testid="city-scene"
+      style={cursor ? { cursor } : undefined}
+      onPointerDown={(e) => {
+        if (e.button === 2) rightDown.current = [e.clientX, e.clientY];
+      }}
+      onPointerUp={(e) => {
+        const d = rightDown.current;
+        rightDown.current = null;
+        // 右键拖拽是旋转视角；只有几乎不动的右键单击才算「退出工具」
+        if (
+          e.button === 2 &&
+          d &&
+          Math.hypot(e.clientX - d[0], e.clientY - d[1]) < 5
+        )
+          onRightClick?.();
+      }}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <Canvas
         shadows={shadowOn ? "percentage" : false}
@@ -193,8 +220,15 @@ export default function CityScene3D({
         <ForestLayer parcel={parcel} tiles={tiles} />
         <OccupiedLayer parcel={parcel} />
         <TileLayer parcel={parcel} tiles={tiles} />
-        <HoverFrame parcel={parcel} cell={ghost ? null : hover} />
+        <HoverFrame parcel={parcel} cell={ghost || overlay ? null : hover} />
         <GhostLayer parcel={parcel} ghost={ghost} />
+        {overlay && (
+          <CellFrames
+            parcel={parcel}
+            cells={overlay.cells}
+            color={overlay.color}
+          />
+        )}
 
         <CameraRig
           extent={extent}

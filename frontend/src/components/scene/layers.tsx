@@ -445,3 +445,51 @@ export function GhostLayer({
     </group>
   );
 }
+
+/** 任意格框高亮（拆除模式选中区块等），一个 InstancedMesh */
+export function CellFrames({
+  parcel,
+  cells,
+  color,
+}: {
+  parcel: Parcel;
+  cells: Cell[];
+  color: string;
+}) {
+  const g = gridOf(parcel);
+  const geometry = useMemo(
+    () => cellFrameGeometry(parcel.cell_size_m),
+    [parcel.cell_size_m],
+  );
+  const material = useMemo(
+    () => new THREE.MeshBasicMaterial({ vertexColors: true }),
+    [],
+  );
+  const ref = useRef<THREE.InstancedMesh>(null);
+  useLayoutEffect(() => {
+    const m = ref.current;
+    if (!m) return;
+    const c3 = new THREE.Color(color);
+    cells.forEach(([r, c], i) => {
+      const [x, z] = cellToWorld(g, r, c);
+      tmp.position.set(x, cellTop(parcel, r, c) + 0.6, z);
+      tmp.rotation.set(0, 0, 0);
+      tmp.scale.set(1.04, 1, 1.04);
+      tmp.updateMatrix();
+      m.setMatrixAt(i, tmp.matrix);
+      m.setColorAt(i, c3);
+    });
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    m.computeBoundingSphere();
+  }, [cells, color, parcel, g]);
+  if (!cells.length) return null;
+  return (
+    <instancedMesh
+      key={cells.length}
+      ref={ref}
+      args={[geometry, material, cells.length]}
+      renderOrder={3}
+    />
+  );
+}

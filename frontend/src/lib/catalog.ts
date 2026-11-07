@@ -21,6 +21,8 @@ export interface TileSpec {
   footprint: [number, number];
   /** 总造价（元）；util_bridge 为每格单价 */
   cost: number;
+  /** 卡面一句人话（14 §2.1）：住多少人 / 多少岗位 / 起什么作用；数值取自 sim-config（03 §8），仅展示 */
+  blurb: string;
 }
 
 export const TILE_SPECS: Record<TileType, TileSpec> = {
@@ -30,6 +32,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "residential",
     footprint: [1, 1],
     cost: 80_000,
+    blurb: "住 300 人",
   },
   res_mid: {
     type: "res_mid",
@@ -37,6 +40,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "residential",
     footprint: [1, 1],
     cost: 220_000,
+    blurb: "住 900 人",
   },
   res_high: {
     type: "res_high",
@@ -44,6 +48,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "residential",
     footprint: [1, 1],
     cost: 600_000,
+    blurb: "住 2400 人",
   },
   com_shop: {
     type: "com_shop",
@@ -51,6 +56,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "commercial",
     footprint: [1, 1],
     cost: 300_000,
+    blurb: "80 个岗位",
   },
   com_cbd: {
     type: "com_cbd",
@@ -58,6 +64,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "commercial",
     footprint: [2, 2],
     cost: 2_200_000,
+    blurb: "1200 个岗位",
   },
   ind_light: {
     type: "ind_light",
@@ -65,6 +72,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "industrial",
     footprint: [2, 2],
     cost: 1_500_000,
+    blurb: "900 个岗位",
   },
   ind_heavy: {
     type: "ind_heavy",
@@ -72,6 +80,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "industrial",
     footprint: [3, 3],
     cost: 4_000_000,
+    blurb: "2600 个岗位 · 有污染",
   },
   green_park: {
     type: "green_park",
@@ -79,6 +88,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "green",
     footprint: [1, 1],
     cost: 150_000,
+    blurb: "提升幸福度",
   },
   green_plaza: {
     type: "green_plaza",
@@ -86,6 +96,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "green",
     footprint: [2, 2],
     cost: 500_000,
+    blurb: "地标 · 带动地价",
   },
   edu_school: {
     type: "edu_school",
@@ -93,6 +104,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "service",
     footprint: [2, 2],
     cost: 1_200_000,
+    blurb: "孩子就近上学",
   },
   med_clinic: {
     type: "med_clinic",
@@ -100,6 +112,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "service",
     footprint: [2, 2],
     cost: 2_000_000,
+    blurb: "看病不用跑远",
   },
   trans_metro: {
     type: "trans_metro",
@@ -107,6 +120,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "transport",
     footprint: [1, 1],
     cost: 3_000_000,
+    blurb: "通勤大幅缩短",
   },
   trans_road: {
     type: "trans_road",
@@ -114,6 +128,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "transport",
     footprint: [1, 1],
     cost: 60_000,
+    blurb: "补路网",
   },
   util_bridge: {
     type: "util_bridge",
@@ -121,6 +136,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "utility",
     footprint: [1, 1],
     cost: 200_000,
+    blurb: "跨河通行 · 按格计价",
   },
 };
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
+import CreateCity from "./CreateCity";
 
-/** 落地页占位（05 §2.1 / 10 §7：创建新城 / 输入城市码加入，随 PR-25 接入存档接口） */
+/** 落地页（05 §2.1 / 10 §7）：创建新城；输入城市码加入随 PR-25 存档体系接入 */
 export default function Home() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col justify-center gap-6 px-6 py-16">
@@ -16,14 +17,10 @@ export default function Home() {
         <li>随时推演未来 10 年、生成城市诊断报告</li>
         <li>输入城市码，换设备接着经营</li>
       </ol>
-      <div>
-        <Link
-          href="/sandbox"
-          className="inline-block rounded-md bg-accent px-4 py-2 font-medium text-bg hover:opacity-90"
-        >
-          查看 3D 沙盘预览（mock 地块）
-        </Link>
-      </div>
+      <CreateCity />
+      <Link href="/sandbox" className="text-sm text-fg-muted underline">
+        3D 沙盘渲染预览（mock 地块）
+      </Link>
     </main>
   );
 }

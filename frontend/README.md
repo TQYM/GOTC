@@ -10,12 +10,16 @@ Next.js 16（App Router）· React 19 · TypeScript strict · Tailwind CSS 4 · 
 
 ```bash
 npm ci
-npm run dev          # http://localhost:3000，3D 沙盘预览在 /sandbox（含帧率 / draw call 面板）
+npm run dev          # http://localhost:3000：首页「创建新城」进入 /game?session=…；3D 渲染预览在 /sandbox
 npm run lint         # ESLint（CI 强制）
 npm run typecheck    # tsc --noEmit
 npm run format       # Prettier
 npm run build        # 生产构建（CI 强制）
 ```
+
+- 浏览器只请求同源 `/api/*`，由 Next 反代到 FastAPI（`API_BASE`，默认 `http://localhost:8000`，**构建时读取**），后端无需开 CORS。
+- 不连后端：首页点「离线演示」，或任意页面 URL 加 `?mock=1`（浏览器内 mock，按 10 号文档不限时语义运行，数值为演示公式）。
+- `?debug=1` 暴露 `window.__city20Scene` / `window.__city20Store` 供 E2E 测试。
 
 依赖与构建产物（`node_modules`、`.next`）不进项目卷，见仓库 AGENTS.md。
 
@@ -23,7 +27,9 @@ npm run build        # 生产构建（CI 强制）
 
 ```
 src/
-├── app/                        # 路由：/（落地页）、/sandbox（3D 沙盘预览，mock 数据）
+├── app/                        # 路由：/（落地页 + 创建新城）、/game?session=（游戏页）、/sandbox（渲染预览）
+├── components/game/            # GameView（三栏布局 + 放置交互）、ToolBar、MetricsPanel、Toasts、RemoveConfirm
+├── store/game.ts               # Zustand 会话 store（05 §2.4）：阶段只信后端，失败零变更
 ├── components/scene/
 │   ├── CityScene3D.tsx         # 场景入口：相机、光照/阴影、分层、性能探针
 │   ├── CameraRig.tsx           # 天际线式相机操控（13 §4.1）：右键旋转、中键/WASD 平移、滚轮向光标缩放、Home 复位
@@ -33,6 +39,8 @@ src/
 │   ├── coords.ts               # 米制局部坐标（片区中心为原点）↔ 格 r,c
 │   └── toon.ts                 # MeshToonMaterial + 3 阶 gradientMap
 └── lib/
+    ├── api/                    # CityApi 抽象：sessionsV1（当前后端）/ mockApi（离线）+ 错误人话化
+    ├── validate.ts             # 本地放置预校验（地形 + 占用 + 资金缓存，仅体验层）
     ├── contract.ts             # 02 契约 TS 镜像（v1 正文 + 11 §7 v1.1 扩展）
     ├── contractV2.ts           # 10 §5 API v2 预备类型（02 升版后对齐）
     ├── catalog.ts              # 01 §3 区块目录（展示/预校验用，真值以后端为准）

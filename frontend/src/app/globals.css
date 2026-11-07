@@ -58,3 +58,39 @@ body {
   color: var(--fg);
   font-family: var(--font-sans);
 }
+
+/* 指标脉冲（05 §2.3：300ms，升绿降红） */
+@keyframes metric-pulse-up {
+  0% {
+    color: #4ade80;
+    transform: scale(1.12);
+  }
+  100% {
+    color: inherit;
+    transform: scale(1);
+  }
+}
+@keyframes metric-pulse-down {
+  0% {
+    color: #f87171;
+    transform: scale(1.12);
+  }
+  100% {
+    color: inherit;
+    transform: scale(1);
+  }
+}
+.metric-pulse-up {
+  display: inline-block;
+  animation: metric-pulse-up 300ms ease-out;
+}
+.metric-pulse-down {
+  display: inline-block;
+  animation: metric-pulse-down 300ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .metric-pulse-up,
+  .metric-pulse-down {
+    animation: none;
+  }
+}
