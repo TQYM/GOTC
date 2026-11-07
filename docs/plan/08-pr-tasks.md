@@ -18,8 +18,8 @@
 - 估时：3h。
 
 ### PR-03 REST 桩接口 —— 后端
-- 前置：PR-01（开发）、PR-02（联调）。做什么：[02 §3](02-data-contract.md) 全部 8 端点先返回**内置假数据**（地块用 PR-02 真生成，指标/推演给静态样例）；错误协议 9 码挂齐。
-- DoD：02 每个端点用样例请求各通一次；错误码各命中一次；**此 PR 合并后前端立即联调点 A**。
+- 前置：PR-01（开发）、PR-02（联调）。做什么：[02 §3](02-data-contract.md) 全部 8 端点先返回**内置假数据**（地块用 PR-02 真生成，指标/推演给静态样例）；错误协议 7 码挂齐。
+- DoD：02 每个端点用样例请求各通一次；7 个错误码各命中一次；**此 PR 合并后前端立即联调点 A**。
 - 估时：2h。
 
 ### PR-04 Canvas 沙盘渲染 —— 前端
@@ -67,7 +67,7 @@
 - 估时：2h。
 
 ### PR-12 规划导师 —— 后端
-- 前置：PR-08、PR-09。做什么：[04 §4](04-ai-roles.md)：90s 定时点评、polish 期 Top3、终局报告三段式叙事（report_text）；theory_refs 引用库。
+- 前置：PR-08、PR-09。做什么：[04 §4](04-ai-roles.md)：90s 定时点评、polish 期 Top3、终局结构化 `report`（overview/dimensions/ending_story）；theory_refs 引用库。
 - DoD：报告 400–700 字、三段式齐全；theory_refs 只出现允许值；模板降级版同样可用。
 - 估时：3h。
 
@@ -84,12 +84,12 @@
 - 估时：4h。
 
 ### PR-15 状态机·倒计时·阶段流转 —— 前端
-- 前置：PR-14。做什么：[05 §2.4](05-frontend.md) 状态机落地：briefing→build→polish→locked 全迁移只信后端 phase_change；倒计时基准校正（§3.4）；阶段横幅 + polish Top3 展示位。
+- 前置：PR-14。做什么：[05 §2.4](05-frontend.md) 状态机落地：briefing→build→polish→locked→report 全迁移只信后端 phase_change/report_ready；倒计时基准校正（§3.4）；阶段横幅 + polish Top3 展示位。
 - DoD：刷新任意阶段现场 100% 恢复；倒计时 ≤30s 变红；SSE 乱序回放测试不崩（05 DoD-5）。
 - 估时：4h。
 
 ### PR-16 推演动画与报告页 —— 前端
-- 前置：PR-15 + 后端 finalize 真身（随 PR-07/08 已可用）。做什么：ProjectionPlayer 年度快进（[05 §2.3](05-frontend.md)，约 3.5s/年）；报告页：五维雷达（自绘 SVG）、结局徽章映射、报告全文、种子分享、重开。
+- 前置：PR-15 + 后端 finalize 真身（随 PR-07/08 已可用）。做什么：后端 finalize 先完整预计算 projection，ProjectionPlayer 再按 `projection_step` 年度快进（[05 §2.3](05-frontend.md)，约 3.5s/年）；报告页消费 scores、ending、结构化 report、city_name，提供五维雷达（自绘 SVG）、结局徽章映射、种子分享、重开。
 - DoD：完整一局 20 分钟走通出报告（联调点 C）；雷达五维与后端 scores 一致；结局徽章正确映射 6 结局。
 - 估时：6h。
 

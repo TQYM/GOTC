@@ -30,7 +30,7 @@ backend/
 │   │   ├── sessions.py    # 02 §3 全部端点
 │   │   └── stream.py      # SSE 端点
 │   ├── core/
-│   │   ├── session.py     # 会话对象：地块+已放区块+指标+阶段+事件缓冲
+│   │   ├── session.py     # 会话对象：地块+已放区块+指标+阶段+projection+事件缓冲
 │   │   ├── store.py       # 会话注册表：id→会话，内存 dict + 过期清理
 │   │   └── timer.py       # 阶段调度器：briefing/build/polish 的倒计时与阶段切换
 │   ├── sim/
@@ -72,7 +72,7 @@ backend/
 - 每会话一个 broadcaster：事件先进环形缓冲（200 条）再推给活跃订阅生成器。
 - 心跳：定时任务每 15s 发空 delta 的 tick，同时兼作时间基准校正源。
 - 断点补发：客户端带 Last-Event-ID 时，从缓冲里找该 id 之后的事件补发；不在缓冲范围内则从当前快照发一条全量 tick + phase_change 重置前端。
-- 阶段切换、news/citizen/mentor、projection_step、report_ready 全部走同一 broadcaster，事件 id 单调递增。
+- 阶段切换、news/citizen/mentor、projection_step、report_ready 全部走同一 broadcaster，事件 id 单调递增；projection_step 只播放 finalize 时已计算的切片。
 
 ## 5. AI 编排层（narrate）
 
@@ -95,7 +95,7 @@ backend/
 
 ## 8. 后端验收标准（DoD，逐条打勾）
 
-1. 02 契约全部端点与事件类型按样例测试全绿；错误协议 9 个 code 逐一命中过。
+1. 02 契约全部端点与事件类型按样例测试全绿；错误协议 7 个 code 逐一命中过。
 2. 相同 seed + 相同操作序列，两次运行最终 projection 逐字段一致（确定性测试）。
 3. finalize 在 48×48 满布局最坏情况下 <2s（契约性能）。
 4. 全量重算 <10ms（抽样 100 次取 p95）。

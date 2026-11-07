@@ -14,7 +14,7 @@ class Phase(StrEnum):
 
 
 class Metrics(BaseModel):
-    at_year: int = Field(ge=1)
+    at_year: int = Field(ge=0)
     at_phase: Phase
     funds: int
     population: int = Field(ge=0)
@@ -33,6 +33,6 @@ class Metrics(BaseModel):
 
 
 class MetricsDiff(BaseModel):
-    at_year: int = Field(ge=1)
+    at_year: int = Field(ge=0)
     delta: dict[str, int | float] = Field(default_factory=dict)
     after: Metrics | None = None

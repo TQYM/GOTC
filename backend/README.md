@@ -2,6 +2,8 @@
 
 FastAPI 后端：确定性模拟引擎（[03](../docs/plan/03-sim-engine.md)）+ AI 叙述层编排（[04](../docs/plan/04-ai-roles.md)）+ SSE 推送。对前端只暴露 [02 契约](../docs/plan/02-data-contract.md)。
 
+当前状态：契约模型与确定性地块生成已落地；REST、SSE、完整 sim 和 AI 编排按 [PR 任务卡](../docs/plan/08-pr-tasks.md) 逐步接入。
+
 ## 目录骨架（06 §2）
 
 ```
@@ -30,8 +32,10 @@ pip install -e ".[dev]"
 ruff check .
 pytest -q
 
-# 起服务（脚手架落地后）
+# 起服务（当前提供健康检查；完整路由按任务卡接入）
 uvicorn app.main:app --reload --port 8000
 ```
+
+健康检查：`GET http://127.0.0.1:8000/healthz`。
 
 依赖与虚拟环境不要装进项目卷（`.venv/` 已被 gitignore；设备级规范要求放 `$BUILD_SCRATCH_ROOT`）。

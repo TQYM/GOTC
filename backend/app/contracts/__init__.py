@@ -3,6 +3,7 @@
 任何人不得单方面变更字段名/枚举值；修改流程见 02 §0.1。
 """
 
+from app.contracts.common import Source, TextPayload
 from app.contracts.errors import (
     HTTP_STATUS_BY_CODE,
     ErrorBody,
@@ -11,6 +12,7 @@ from app.contracts.errors import (
 )
 from app.contracts.events import (
     CitizenEvent,
+    CitizenPersona,
     CitizenSentiment,
     CitizenTopic,
     MentorEvent,
@@ -19,6 +21,8 @@ from app.contracts.events import (
     NewsSeverity,
     PhaseChangeEvent,
     ProjectionStep,
+    Report,
+    ReportDimensions,
     ReportReadyEvent,
     SseErrorEvent,
     TheoryRef,
@@ -47,7 +51,10 @@ from app.contracts.tile import PlaceRequest, RemoveRequest, Tile, TileType
 
 __all__ = [
     "AdvanceResponse",
+    "Source",
+    "TextPayload",
     "CitizenEvent",
+    "CitizenPersona",
     "CitizenSentiment",
     "CitizenTopic",
     "CreateSessionRequest",
@@ -74,6 +81,8 @@ __all__ = [
     "RemoveRequest",
     "RemoveResult",
     "ReportReadyEvent",
+    "Report",
+    "ReportDimensions",
     "Scores",
     "SessionCreated",
     "SessionState",

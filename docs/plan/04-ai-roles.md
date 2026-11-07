@@ -9,7 +9,7 @@
 | 数值层 | sim 引擎（[03](03-sim-engine.md)） | 全部指标、结局判定、事件数值效果 |
 | 叙述层 | 三个 AI 角色（本文档） | 新闻、市民吐槽、导师点评、报告叙事、地块简报 |
 
-- AI 的输入由引擎组装（指标 + 变化 + 结构化地图摘要），AI 的输出是**文本**，引擎只校验格式、直接转发 SSE，不做任何数值解析回写。
+- AI 的输入由引擎组装（指标 + 变化 + 结构化地图摘要），AI 的输出是**叙述数据**，引擎按 02 的 Pydantic 形状校验后直接转发 SSE，不做任何数值解析回写。每个 AI 或模板产出的事件、简报和报告都必须带 `source: "ai" | "template"`。
 - AI 输出不得包含任何数字以外的可执行内容；若模型返回了"建议再建 3 个公园"之类的数字，前端按普通文本显示，引擎忽略（语义层面无法阻止 LLM 说话，能做的是不让它影响状态）。
 
 ## 2. 角色一：数据大脑（新闻播报员）
@@ -19,7 +19,7 @@
 | 人设 | 冷静专业的城市数据电台主播，30 字内短句，爱用对比（"环比上周，拥堵指数又涨了 0.08"） |
 | 触发时机 | 每次放置/拆除后，若 metrics_diff 命中显著变化阈值（单项 happiness ±3、congestion ±0.05、population ±500 等，可配） |
 | 节流 | 两次触发间隔 ≥8 秒，多余的变化合并进一条播报 |
-| 输出契约 | [02 §3.8](02-data-contract.md) 的 news 事件：headline（≤20 字）+ body（≤80 字）+ severity（info/warning/alert，由变化幅度映射） |
+| 输出契约 | [02 §3.8](02-data-contract.md) 的 news 事件：headline（≤20 字）+ body（≤80 字）+ severity（info/warning/alert，由变化幅度映射）+ `at_year` + `source` |
 | 输入上下文 | 当前 Metrics 快照 + MetricsDiff + 最近 3 条已播报标题（防重复） |
 
 ## 3. 角色二：市民之声（微博市民）
@@ -28,7 +28,7 @@
 |---|---|
 | 人设 | 5 个固定人设轮换：程序员小李（通勤）、带娃妈妈王姐（学校医院）、个体户老周（地价店铺）、退休教师陈伯（绿地安静）、外地租客阿紫（房租房价）。口语化、带emoji、会 @市长 |
 | 触发时机 | 放置后按指标敏感度匹配人设（放学校→王姐；放工厂→陈伯/小李），每 3 次有效放置触发 1 条；幸福度越低压中负面 persona 概率越高 |
-| 输出契约 | citizen 事件：persona（固定 5 选 1）+ text（≤60 字）+ sentiment（angry/happy/neutral）+ topic（commute/edu/med/green/price/pollution） |
+| 输出契约 | citizen 事件：persona（固定 5 选 1）+ text（≤60 字）+ sentiment（angry/happy/neutral）+ topic（commute/edu/med/green/price/pollution）+ `source` |
 | 输入上下文 | 最近 2 条该 persona 的发言（防复读）+ 当前相关指标 + 变化原因一句话（引擎生成，如"因 3 座重工业在 500m 内"） |
 
 ## 4. 角色三：规划导师（指导老师）
@@ -37,8 +37,8 @@
 |---|---|
 | 人设 | 温和但严格的注册城乡规划师，点评必引规范/理论（GB50180 生活圈、TOD、职住平衡、绿道系统），先肯定再指出最优先问题 |
 | 触发时机 | build 期每 90 秒点评 1 次（聚合期间变化）；polish 期开始时产出"Top3 结构问题"列表；终局产出报告叙事 |
-| 输出契约 | mentor 事件：comment（≤120 字）+ theory_refs（tod / life_circle_15 / jobs_housing_balance / green_network / road_hierarchy，可多选）+ severity |
-| 报告叙事 | 终局 report_text：三段式（总体诊断 → 五维逐项点评 → 结局故事），400–700 字 |
+| 输出契约 | mentor 事件：comment（≤120 字）+ theory_refs（tod / life_circle_15 / jobs_housing_balance / green_network / road_hierarchy，可多选）+ severity + `top_issues`（最多 3 条）+ `source` |
+| 报告叙事 | 终局结构化 `report`：`overview`（总体诊断）+ `dimensions`（population/balance/green/traffic/happiness 五维点评）+ `ending_story`（结局故事）+ `source`；合计 400–700 字 |
 | 输入上下文 | 完整 Metrics + 布局统计摘要（各类型区块数、热点区域描述）+ 已发生的导师点评列表（防重复） |
 
 ## 5. Prompt 纪律（三角色共用）
@@ -58,7 +58,7 @@
 | news | "【指标名】升至/降至【值】，主要受【区块类型】影响。" |
 | citizen | 按 sentiment×topic 双键查表（如 angry+commute："每天堵在【道路名】，市长你开开车试试？"） |
 | mentor | 按 Top 指标问题查规则库（如 green_ratio<0.25 → 引 GB50180 绿地条款） |
-| briefing / report | 纯规则模板拼装 |
+| briefing / report | 纯规则模板拼装，输出完整结构并标记 `source: "template"` |
 
 优先级：AI 成功 → AI 文案；失败/超时（8 秒）/解析失败 → 模板。玩家体验无感知的差别只是文采。**比赛演示前必须演示一次降级状态**（断网 or 关 key），证明不崩。
 
@@ -83,5 +83,5 @@
 | 每次放置/拆除（节流后） | 数据大脑 + 市民之声 | news / citizen |
 | build 期每 90 秒 | 规划导师 | mentor |
 | polish 期开始 | 规划导师 Top3 | mentor（severity=warning） |
-| locked 推演年度标签 | 引擎规则模板 | projection.events |
-| report 叙事 | 规划导师 | report_ready（REST finalize 已带模板版，AI 版到达后前端无缝替换） |
+| locked 推演年度标签 | 引擎规则模板 | projection.events（`source: "template"`） |
+| report 叙事 | 规划导师 | report_ready（REST finalize 已带模板版，AI 版到达后前端无缝替换；两者均为结构化 `report`） |

@@ -4,6 +4,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.contracts.common import TextPayload
+
 
 class Terrain(StrEnum):
     FLAT = "flat"
@@ -18,7 +20,7 @@ class ParcelConstraints(BaseModel):
     height_limit_m: int = Field(ge=1)
     green_line_m: int = Field(ge=0)
     buildable_ratio: float = Field(ge=0.0, le=1.0)
-    briefing: str
+    briefing: TextPayload
 
 
 def _check_coord(coord: list[int]) -> bool:

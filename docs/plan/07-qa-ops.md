@@ -7,7 +7,7 @@
 | 层 | 内容 | 保护的命脉 | 归属 |
 |---|---|---|---|
 | L1 sim 黄金样例 | 固定 seed + 固定操作序列 → 指标逐字段断言（人口/地价/通勤/幸福度各 2 例，含边界：满布局、只放住宅） | **确定性**（03 §1）：改动公式时立刻知道谁变了 | 后端 |
-| L2 契约样例测试 | 按 [02](02-data-contract.md) 每个端点的请求/响应 JSON 样例逐一过；9 个错误码各命中一次；8 种 SSE 事件各推一条 | **前后端不打架**：接口漂移秒发现 | 后端（前端按 mock 联调时天然复验） |
+| L2 契约样例测试 | 按 [02](02-data-contract.md) 每个端点的请求/响应 JSON 样例逐一过；7 个错误码各命中一次；8 种 SSE 事件各推一条 | **前后端不打架**：接口漂移秒发现 | 后端（前端按 mock 联调时天然复验） |
 | L3 推演性能测试 | 满布局（200 区块）finalize 计时 <2s；重算 p95 <10ms | **契约性能**（02 §3.6） | 后端 |
 | L4 降级链路测试 | 关掉 LLM 环境变量完整打一局：模板文案出现、游戏不崩、报告有叙事 | **AI 挂了游戏照跑**（铁律） | 后端 |
 | L5 前端关键路径 | 建局→放 3 块→锁定→报告出雷达图（Playwright 1 条用例即可，可用 mock 后端） | 主流程不被 UI 重构弄断 | 前端 |
@@ -16,6 +16,7 @@
 ## 2. CI（已配置，本次规划提交时升级 actions v5）
 
 - `.github/workflows/ci.yml` 检测式：frontend/ 有 package.json 才跑 lint+build，backend/ 有 pyproject.toml 才跑 ruff+pytest——**骨架未落地前全绿，永不误报**。
+- CI 还会始终执行 Markdown 相对链接检查；链接目标不存在时直接失败，避免规划文档引用漂移。
 - actions 版本已核查升级：actions/checkout v4→v5、actions/setup-node v4→v5（setup-python 已是 v5）。
 - 分支纪律照 [CONTRIBUTING.md](../CONTRIBUTING.md)：feat/xxx 当天合当天删；免审直通不等于免 CI。
 

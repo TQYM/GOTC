@@ -16,6 +16,7 @@ rng 驱动，保持确定性）；河岸按"两侧各 1 格"（每行 2 格）�
 import random
 
 from app.config import GenerationConfig, SimConfig, load_sim_config
+from app.contracts.common import Source, TextPayload
 from app.contracts.parcel import Parcel, ParcelConstraints, Terrain
 
 # 冲突优先级（数字大者胜，03 §2）
@@ -257,10 +258,13 @@ def generate_parcel(seed: int, config: SimConfig | None = None) -> Parcel:
         height_limit_m=height_limit,
         green_line_m=gen.green_line_m,
         buildable_ratio=round(buildable, 2),
-        briefing=cfg.briefing_template.format(
-            height_limit_m=height_limit,
-            green_line_m=gen.green_line_m,
-            buildable_pct=round(buildable * 100),
+        briefing=TextPayload(
+            text=cfg.briefing_template.format(
+                height_limit_m=height_limit,
+                green_line_m=gen.green_line_m,
+                buildable_pct=round(buildable * 100),
+            ),
+            source=Source.TEMPLATE,
         ),
     )
     return Parcel(

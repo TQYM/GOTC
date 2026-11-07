@@ -11,7 +11,7 @@
 | 样式 | Tailwind CSS + CSS 变量主题 | 沙盘 UI 大量内联几何计算，utility 类最顺手 |
 | 客户端状态 | Zustand | 会话状态一个 store 装下，配合 Immer 做不可变更新 |
 | 服务端状态 | 手写 fetch 封装 + SSE 管理器 | 数据形状由契约死锁，RTK Query/React Query 的收益撑不起学习成本；SSE 本来就要自己管重连 |
-| 拖拽 | @dnd-kit/core | 现行主流、无障碍好；react-dnd 维护停滞（已核查）不用 |
+| 拖拽 | @dnd-kit/core | 现行主流、无障碍好，支持工具栏到 Canvas 的多格预览 |
 | 图表 | 自绘 SVG（雷达图/曲线） | 报告页图表就三种，引库反而受制 |
 | 地图渲染 | Canvas 2D（48×48 网格） | DOM 2304 格会卡；Canvas 重绘一帧 <5ms，且方便做格子高亮/扩散动效 |
 | 部署 | 同仓库 `frontend/` 目录，`npm run build` 出静态 + Node 运行时 | 比赛现场一条命令起服务 |
@@ -48,7 +48,7 @@
 | MetricsPanel | 14 指标仪表盘 | 数值变化时用 300ms 颜色脉冲（升绿降红）提示 delta |
 | PhaseBanner | 阶段名 + 倒计时 + 简报/Top3 展示位 | 倒计时只信后端 `time_left_sec` + 本地补偿渲染；倒计时 ≤30s 变红闪 |
 | InfoFeed | SSE 三栏信息流 | 按事件类型分组渲染样式；自动滚动到底，用户上翻阅读时暂停自动滚 |
-| ProjectionPlayer | 推演期年度快进动画 | 消费 projection_step 逐帧推进（约 3.5s/年）；用引擎直出的最终 projection 做确定性补帧 |
+| ProjectionPlayer | 推演期年度快进动画 | 消费后端已完整预计算的 `projection_step` 逐帧推进（约 3.5s/年）；断线或刷新时用会话中的完整 `projection` 按 `projection_published_year` 确定性补帧 |
 | ReportPage | 五维雷达 + 评分 + 结局 + 报告全文 + 分享 | 雷达图自绘 SVG；结局徽章按 ending 值映射插画 |
 
 ### 2.4 状态机（前端唯一的状态真相）
@@ -58,11 +58,11 @@ Zustand store 字段与迁移：
 | 状态 | 进入条件 | 出口 |
 |---|---|---|
 | loading | 路由进入 | GET 会话成功 → briefing；404 → 回首页 |
-| briefing | phase=briefing | 用户点「开始建设」或 20s 到 → advance |
+| briefing | phase=briefing | 用户点「开始建设」或 20s 到 → 调用 `advance`；只接受后端返回的 phase_change |
 | build | phase=build | 后端推 phase_change=polish（15 分钟到） |
-| polish | phase=polish | 用户点「锁定推演」或 2 分钟到 → finalize |
-| locked | phase=locked | finalize 响应到达 → 播投影动画 → 跳 /report |
-| report | finalize 响应含 scores | — |
+| polish | phase=polish | 用户点「锁定推演」调用 `finalize`，或 2 分钟到由后端自动 finalize；只接受后端进入 `locked` |
+| locked | phase=locked | 后端已计算完整 projection；前端只播放 `projection_step`，第 10 年收到 report_ready 后进入 /report |
+| report | phase=report | 会话恢复或 report_ready 提供 scores、ending、结构化 report、city_name |
 
 **规则：一切状态迁移以 REST 响应或 phase_change 事件为准；本地只许做「乐观显示」（如拖拽悬停），不许做「乐观迁移」。**
 
@@ -72,7 +72,7 @@ Zustand store 字段与迁移：
 
 - 从 ToolBar 拖出区块卡牌（@dnd-kit），悬停沙盘时 PlacementLayer 展开覆盖格预览，实时合法性用**本地预校验**（地形表 + 已占用格缓存 + 资金缓存），非法即红框禁止落下。
 - 落下时调用 place 端点：成功 → 棋盘落子 + 指标脉冲；失败 → 按错误协议弹对应 toast，**本地状态零变更**。
-- 本地预校验只是体验层：最终以 REST 400 为准（比如阶段不合法、并发占用）。
+- 本地预校验只是体验层：最终以 REST 错误协议为准（比如阶段不合法、并发占用）。
 
 ### 3.2 拆除
 
@@ -80,13 +80,13 @@ Zustand store 字段与迁移：
 
 ### 3.3 断线恢复
 
-- 页面刷新/切后台：路由重进时 GET 会话全量恢复（棋盘 + 指标 + 阶段）。
+- 页面刷新/切后台：路由重进时 GET 会话全量恢复（棋盘 + 指标 + 阶段 + projection + 已发布年份 + scores/ending/report/city_name）。
 - SSE 断开：InfoFeed 顶部显示红色「连接中断，重连中…」；前端每 2s 重连一次，带 Last-Event-ID；恢复后自动隐藏。重连超过 30s 提示用户刷新。
 - 操作请求失败（网络层）：toast + 一键重试；不做自动重试（防重复扣款语义，幂等性问题见 06 §6）。
 
 ### 3.4 倒计时
 
-- 首值来自 REST/SSE 的 time_left_sec，之后前端本地每秒递减渲染；每次 SSE phase_change 或 REST 响应都重置基准。允许 ±2s 漂移，不做对时协议。
+- 首值来自 REST/SSE 的 time_left_sec，之后前端本地每秒递减渲染；每次 SSE phase_change、tick 或 REST 响应都重置基准。允许 ±2s 漂移，不做对时协议；阶段迁移和自动 finalize 只信后端。
 
 ## 4. 视觉与动效基调
 

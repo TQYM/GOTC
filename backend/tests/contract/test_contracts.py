@@ -10,6 +10,7 @@ from app.contracts import (
     HTTP_STATUS_BY_CODE,
     AdvanceResponse,
     CitizenEvent,
+    CitizenPersona,
     CreateSessionRequest,
     Ending,
     ErrorCode,
@@ -61,7 +62,10 @@ def make_parcel_json() -> dict:
             "height_limit_m": 80,
             "green_line_m": 30,
             "buildable_ratio": 0.74,
-            "briefing": "本地块限高80m，河道两侧30m绿线，省道保留不可拆。",
+            "briefing": {
+                "text": "本地块限高80m，河道两侧30m绿线，省道保留不可拆。",
+                "source": "template",
+            },
         },
         "seed": 882314,
     }
@@ -192,6 +196,7 @@ class TestSseEventShapes:
                 "body": "商务中心带动周边住宅地价上行。",
                 "severity": "info",
                 "at_year": 2,
+                "source": "template",
             }
         )
         assert e.severity is NewsSeverity.INFO
@@ -203,9 +208,24 @@ class TestSseEventShapes:
                 "text": "@市长 城东通勤转三趟车😡",
                 "sentiment": "angry",
                 "topic": "commute",
+                "source": "template",
             }
         )
         assert e.topic.value == "commute"
+        assert e.persona is CitizenPersona.PROGRAMMER_LI
+
+    def test_citizen_persona_is_one_of_the_five_planned_personas(self):
+        assert len(CitizenPersona) == 5
+        with pytest.raises(ValidationError):
+            CitizenEvent.model_validate(
+                {
+                    "persona": "未登记人设",
+                    "text": "市民意见",
+                    "sentiment": "neutral",
+                    "topic": "green",
+                    "source": "template",
+                }
+            )
 
     def test_mentor(self):
         e = MentorEvent.model_validate(
@@ -213,6 +233,8 @@ class TestSseEventShapes:
                 "comment": "职住比失衡，建议沿地铁线补住宅。",
                 "theory_refs": ["tod", "jobs_housing_balance"],
                 "severity": "suggestion",
+                "top_issues": ["职住比偏低"],
+                "source": "template",
             }
         )
         assert len(e.theory_refs) == 2
@@ -223,15 +245,73 @@ class TestSseEventShapes:
         assert e.phase is Phase.BUILD
 
     def test_projection_step(self):
-        e = ProjectionStep.model_validate({"year": 4, "metrics": make_metrics_json()})
+        e = ProjectionStep.model_validate(
+            {
+                "year": 4,
+                "metrics": make_metrics_json(),
+                "events": ["拥堵突破阈值"],
+                "source": "template",
+            }
+        )
         assert e.year == 4
         assert e.metrics.population == 8200
 
     def test_report_ready(self):
         e = ReportReadyEvent.model_validate(
-            {"report_text": "这座为通勤而建的城市……", "city_name": "江湾市"}
+            {
+                "report": {
+                    "overview": "总体诊断",
+                    "dimensions": {
+                        "population": "人口稳定",
+                        "balance": "职住协调",
+                        "green": "绿地充足",
+                        "traffic": "交通顺畅",
+                        "happiness": "居民满意",
+                    },
+                    "ending_story": "江湾市继续生长。",
+                    "source": "template",
+                },
+                "city_name": "江湾市",
+                "source": "template",
+            }
         )
         assert e.city_name == "江湾市"
+
+    def test_report_dimensions_must_match_the_five_scores(self):
+        base = {
+            "overview": "总体诊断",
+            "dimensions": {
+                "population": "人口稳定",
+                "balance": "职住协调",
+                "green": "绿地充足",
+                "traffic": "交通顺畅",
+                "happiness": "居民满意",
+            },
+            "ending_story": "城市继续生长。",
+            "source": "template",
+        }
+        ReportReadyEvent.model_validate(
+            {"report": base, "city_name": "江湾市", "source": "template"}
+        )
+        with pytest.raises(ValidationError):
+            ReportReadyEvent.model_validate(
+                {
+                    "report": {**base, "dimensions": {"population": "人口稳定"}},
+                    "city_name": "江湾市",
+                    "source": "template",
+                }
+            )
+        with pytest.raises(ValidationError):
+            ReportReadyEvent.model_validate(
+                {
+                    "report": {
+                        **base,
+                        "dimensions": {**base["dimensions"], "finance": "收支平衡"},
+                    },
+                    "city_name": "江湾市",
+                    "source": "template",
+                }
+            )
 
     def test_error_event(self):
         e = SseErrorEvent.model_validate(
@@ -269,6 +349,23 @@ class TestSessionShapes:
         assert s.placements_count == 23
         assert len(s.tiles) == 1
 
+    def test_session_state_city_name_requires_source(self):
+        data = {
+            "session_id": "ses_x7k2",
+            "phase": "report",
+            "time_left_sec": 0,
+            "parcel": make_parcel_json(),
+            "tiles": [],
+            "metrics": make_metrics_json(),
+            "placements_count": 0,
+            "city_name": "江湾市",
+        }
+        with pytest.raises(ValidationError):
+            SessionState.model_validate(data)
+        data["city_name_source"] = "template"
+        state = SessionState.model_validate(data)
+        assert state.city_name_source.value == "template"
+
     def test_place_result(self):
         r = PlaceResult.model_validate(
             {
@@ -292,8 +389,8 @@ class TestFinalize:
             {
                 "phase": "locked",
                 "projection": [
-                    {"year": 4, "metrics": metrics, "events": ["人口流入放缓"]},
-                    {"year": 5, "metrics": metrics, "events": ["cbd地价上涨12%"]},
+                    {"year": 4, "metrics": metrics, "events": ["人口流入放缓"], "source": "template"},
+                    {"year": 5, "metrics": metrics, "events": ["cbd地价上涨12%"], "source": "template"},
                 ],
                 "ending": "thriving",
                 "scores": {
@@ -303,7 +400,20 @@ class TestFinalize:
                     "traffic": 51,
                     "happiness": 77,
                 },
-                "report_text": "这座为通勤而建的城市，最终困住了所有人……",
+                "report": {
+                    "overview": "总体诊断",
+                    "dimensions": {
+                        "population": "人口稳定",
+                        "balance": "职住协调",
+                        "green": "绿地充足",
+                        "traffic": "交通顺畅",
+                        "happiness": "居民满意",
+                    },
+                    "ending_story": "这座为通勤而建的城市，最终困住了所有人……",
+                    "source": "template",
+                },
+                "city_name": "江湾市",
+                "city_name_source": "template",
             }
         )
         assert result.ending is Ending.THRIVING

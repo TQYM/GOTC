@@ -4,6 +4,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+from app.contracts.common import Source
+from app.contracts.events import Report
 from app.contracts.metrics import Metrics, Phase
 
 
@@ -28,6 +30,7 @@ class ProjectionYear(BaseModel):
     year: int = Field(ge=1)
     metrics: Metrics
     events: list[str] = Field(default_factory=list)
+    source: Source = Source.TEMPLATE
 
 
 class FinalizeResult(BaseModel):
@@ -35,4 +38,6 @@ class FinalizeResult(BaseModel):
     projection: list[ProjectionYear]
     ending: Ending
     scores: Scores
-    report_text: str
+    report: Report
+    city_name: str
+    city_name_source: Source

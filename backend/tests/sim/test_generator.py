@@ -82,8 +82,9 @@ class TestGoldenSample:
 
     def test_briefing_mentions_constraints(self):
         parcel = generate_parcel(GOLDEN_SEED)
-        assert f"限高{parcel.constraints.height_limit_m}m" in parcel.constraints.briefing
-        assert "省道保留不可拆" in parcel.constraints.briefing
+        assert f"限高{parcel.constraints.height_limit_m}m" in parcel.constraints.briefing.text
+        assert "省道保留不可拆" in parcel.constraints.briefing.text
+        assert parcel.constraints.briefing.source.value == "template"
 
 
 class TestContractConformance:

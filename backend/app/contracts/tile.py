@@ -1,8 +1,9 @@
 """Tile 已放置区块（02 §2.2），区块目录见 01 §3。"""
 
 from enum import StrEnum
+from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class TileType(StrEnum):
@@ -27,8 +28,17 @@ class Tile(BaseModel):
     type: TileType
     anchor: list[int]  # [r, c]，多格区块的左上格（01 §3）
     cells: list[list[int]]  # 实际占格列表，前端渲染只信它（02 §2.2）
+    orientation: Literal["horizontal", "vertical"] | None = None
     built_at_year: int = Field(ge=1)
     upkeep: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _check_bridge_orientation(self) -> "Tile":
+        if self.type is TileType.UTIL_BRIDGE and self.orientation is None:
+            raise ValueError("util_bridge 必须提供 orientation")
+        if self.type is not TileType.UTIL_BRIDGE and self.orientation is not None:
+            raise ValueError("只有 util_bridge 可以提供 orientation")
+        return self
 
     @field_validator("anchor")
     @classmethod
@@ -54,6 +64,15 @@ class Tile(BaseModel):
 class PlaceRequest(BaseModel):
     type: TileType
     anchor: list[int]
+    orientation: Literal["horizontal", "vertical"] | None = None
+
+    @model_validator(mode="after")
+    def _check_bridge_orientation(self) -> "PlaceRequest":
+        if self.type is TileType.UTIL_BRIDGE and self.orientation is None:
+            raise ValueError("util_bridge 必须提供 orientation")
+        if self.type is not TileType.UTIL_BRIDGE and self.orientation is not None:
+            raise ValueError("只有 util_bridge 可以提供 orientation")
+        return self
 
     @field_validator("anchor")
     @classmethod

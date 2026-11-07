@@ -19,7 +19,7 @@ CITY20：AI 驱动的城市规划模拟沙盘，单局硬上限 20 分钟。玩�
 
 - `docs/plan/` 是 48 小时开发的唯一执行依据；先读 `docs/plan/00-master.md`，再从 `docs/plan/08-pr-tasks.md` 的任务卡施工。
 - 前后端契约以 `docs/plan/02-data-contract.md` 为准：**改契约先改 02 文档，再改代码**。
-- 玩法与架构背景见 `docs/game-design.md`、`docs/architecture.md`。
+- 玩法与架构背景见 `docs/game-design.md`、`docs/architecture.md`；实际施工以 `docs/plan/` 为准。
 
 ## 铁律
 

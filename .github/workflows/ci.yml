@@ -28,7 +28,7 @@ jobs:
         if: steps.detect.outputs.exists == 'true'
         with:
           node-version: 20
-          cache: npm
+          cache: ${{ hashFiles('frontend/package-lock.json') != '' && 'npm' || '' }}
           cache-dependency-path: frontend/package-lock.json
       - name: Install & lint & build
         if: steps.detect.outputs.exists == 'true'
@@ -64,3 +64,37 @@ jobs:
           if [ -f pyproject.toml ]; then pip install -e ".[dev]"; else pip install -r requirements.txt; fi
           ruff check .
           pytest -q
+
+  docs:
+    name: Markdown links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check relative Markdown links
+        run: |
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          pattern = re.compile(r"(?<!!)(?:\[[^\]]*\])\(([^)]+)\)")
+          failures = []
+          for source in Path(".").rglob("*.md"):
+              if any(part in {".git", ".next", "node_modules", ".venv"} for part in source.parts):
+                  continue
+              text = source.read_text(encoding="utf-8")
+              for raw_target in pattern.findall(text):
+                  target = raw_target.strip().split()[0].strip("<>")
+                  if not target or target.startswith(("http://", "https://", "mailto:", "#")):
+                      continue
+                  target_path = target.split("#", 1)[0]
+                  if not target_path:
+                      continue
+                  resolved = (source.parent / target_path).resolve()
+                  if not resolved.exists():
+                      failures.append(f"{source}: {raw_target}")
+          if failures:
+              print("Broken relative Markdown links:")
+              print("\n".join(failures))
+              raise SystemExit(1)
+          print("Markdown relative links OK")
+          PY

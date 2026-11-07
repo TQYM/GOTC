@@ -22,15 +22,28 @@
 ├── backend/            # FastAPI 后端（模拟引擎 + AI 编排 + SSE）
 ├── docs/
 │   ├── plan/           # ⭐ 48h 执行规划（唯一执行依据，从 08 任务卡入手）
-│   ├── game-design.md  # 玩法设计：20 分钟循环
-│   └── architecture.md # 技术架构与 AI 模型分工
+│   ├── game-design.md  # 玩法背景与玩家循环（导读）
+│   └── architecture.md # 技术架构背景（导读）
 ├── scripts/            # 开发辅助脚本
 └── .github/            # CI 与 Issue / PR 模板
 ```
 
+## 当前状态
+
+规划已冻结，仓库当前包含后端契约模型与确定性地块生成器（PR-01/02 基础骨架）。REST、SSE、完整模拟引擎、前端页面和 AI 编排按 [18 张 PR 任务卡](docs/plan/08-pr-tasks.md) 继续施工；`docs/plan/` 是唯一执行依据。
+
 ## 快速开始
 
-> 脚手架开发中，将在首个功能迭代补齐。详见 [docs/architecture.md](docs/architecture.md)。
+当前可验证后端基础骨架：
+
+```bash
+cd backend
+pip install -e ".[dev]"
+pytest -q
+ruff check .
+```
+
+服务入口已提供 `/healthz`，完整游戏接口将在后续 PR 接入。玩法背景见 [docs/game-design.md](docs/game-design.md)，架构导读见 [docs/architecture.md](docs/architecture.md)。
 
 ## 协作规范
 
