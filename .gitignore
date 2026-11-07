@@ -69,3 +69,7 @@ tmp/
 *.gguf
 assets/generated/
 tools/prepare-parcel/raw/
+tools/prepare-beijing/raw/
+tools/prepare-beijing/__pycache__/
+.dsh-computer-use/
+pelican-*

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>CITY20 · 北京朝阳 CBD–通惠河 · 数据包成品预览</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #eaf3f8;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  #hud { position: fixed; top: 14px; left: 14px; z-index: 10; background: rgba(255,255,255,.92);
+    border-radius: 12px; padding: 12px 16px; box-shadow: 0 2px 12px rgba(0,0,0,.08); max-width: 320px; }
+  #hud h1 { font-size: 16px; margin: 0 0 4px; }
+  #hud .sub { font-size: 12px; color: #666; margin-bottom: 8px; }
+  #hud .ops { font-size: 11px; color: #888; line-height: 1.7; }
+  #legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; margin-top: 8px; }
+  #legend span { display: inline-flex; align-items: center; gap: 4px; }
+  #legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  #fly { margin-top: 8px; display: flex; gap: 6px; }
+  #fly button { font-size: 12px; padding: 4px 10px; border: 1px solid #ddd; border-radius: 8px;
+    background: #fff; cursor: pointer; }
+  #fly button:hover { background: #f0f6ff; }
+  #stats { position: fixed; right: 14px; top: 14px; z-index: 10; font-size: 11px; color: #667;
+    background: rgba(255,255,255,.85); padding: 6px 10px; border-radius: 8px; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 15px; color: #567; z-index: 20; background: #eaf3f8; }
+</style>
+</head>
+<body>
+<div id="loading">正在加载真实北京数据包…</div>
+<div id="hud">
+  <h1>CITY20 · 北京朝阳 CBD–通惠河</h1>
+  <div class="sub">真实北京数据包成品预览 · 2.4×2.4km · 48×48 格<br>道路/水系/地名真实 · 中国尊/央视真实轮廓 · 普通建筑扩散生成</div>
+  <div class="ops">左键旋转 · 右键平移 · 滚轮缩放<br>OSM 真实数据 + seed=20261107 可复现</div>
+  <div id="legend"></div>
+  <div id="fly">
+    <button data-target="zun">中国尊</button>
+    <button data-target="cctv">央视大楼</button>
+    <button data-target="all">全景</button>
+  </div>
+</div>
+<div id="stats"></div>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from './vendor/OrbitControls.js';
+import { mergeGeometries } from './vendor/BufferGeometryUtils.js';
+
+const BASE = '/data/parcels/beijing_cbd/';
+const [parcel, bData, nData, lData] = await Promise.all(
+  ['parcel.json', 'buildings.json', 'network.json', 'labels.json']
+    .map(f => fetch(BASE + f).then(r => r.json())));
+const buildings = bData.buildings;
+const labels = lData.labels;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#eaf3f8');
+scene.fog = new THREE.Fog('#eaf3f8', 3200, 7000);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 1, 12000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.49;
+
+const hemi = new THREE.HemisphereLight('#ffffff', '#b8c4cc', 0.85);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight('#fff5e6', 1.6);
+sun.position.set(1600, 2600, -800);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -1800, right: 1800, top: 1800, bottom: -1800, far: 7000 });
+sun.target.position.set(1200, 0, -1200);
+scene.add(sun, sun.target);
+
+// 卡通 3 阶渐变
+const grad = new THREE.DataTexture(new Uint8Array([90, 160, 255]), 3, 1, THREE.RedFormat);
+grad.needsUpdate = true;
+grad.minFilter = grad.magFilter = THREE.NearestFilter;
+const toon = (color) => new THREE.MeshToonMaterial({ color, gradientMap: grad });
+
+// ---- 地形（合并顶点色）----
+const TERRAIN_COLORS = {
+  flat: '#e9e5d8', road_inherited: '#a8aeb5', river: '#7ec8e3',
+  bank: '#b8e0d2', forest: '#95d5b2', occupied: '#ddd6c6',
+};
+{
+  const pos = [], col = [], idx = [];
+  let vi = 0;
+  for (let r = 0; r < 48; r++) for (let c = 0; c < 48; c++) {
+    const color = new THREE.Color(TERRAIN_COLORS[parcel.terrain[r][c]] || '#e9e5d8');
+    const x0 = c * 50, x1 = x0 + 50, z0 = -r * 50, z1 = z0 - 50;
+    pos.push(x0, 0, z0, x1, 0, z0, x1, 0, z1, x0, 0, z1);
+    for (let k = 0; k < 4; k++) col.push(color.r, color.g, color.b);
+    idx.push(vi, vi + 2, vi + 1, vi, vi + 3, vi + 2);
+    vi += 4;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const ground = new THREE.Mesh(g, new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: grad }));
+  ground.receiveShadow = true;
+  scene.add(ground);
+}
+
+// ---- 道路 ribbon ----
+{
+  const geoms = [];
+  for (const road of nData.roads) {
+    const w = { motorway: 14, trunk: 14, primary: 12, secondary: 10, tertiary: 8 }[road.kind] || 6;
+    const pts = road.line;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+      const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy);
+      if (len < 0.01) continue;
+      const nx = -dy / len * w / 2, ny = dx / len * w / 2;
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute([
+        x0 + nx, 0.15, -(y0 + ny), x0 - nx, 0.15, -(y0 - ny), x1 - nx, 0.15, -(y1 - ny),
+        x0 + nx, 0.15, -(y0 + ny), x1 - nx, 0.15, -(y1 - ny), x1 + nx, 0.15, -(y1 + ny),
+      ], 3));
+      g.computeVertexNormals();
+      geoms.push(g);
+    }
+  }
+  const merged = mergeGeometries(geoms);
+  scene.add(new THREE.Mesh(merged, toon('#7d858d')));
+}
+
+// ---- 建筑（按 kind+category 分组合并）----
+const CATEGORY_COLORS = {
+  cbd: '#5b8def', shop: '#f2a65a', res_high: '#8ecae6', res_mid: '#a7c957',
+  res_low: '#c8d98a', light_industry: '#b088f9', school: '#2a9d8f', hospital: '#e76f51',
+};
+const groups = new Map();
+const landmarkMeshes = {};
+for (const b of buildings) {
+  const shape = new THREE.Shape();
+  b.footprint.forEach(([x, y], i) => i === 0 ? shape.moveTo(x, y) : shape.lineTo(x, y));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: b.height_m, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2);
+  const key = b.kind + '|' + (b.landmark || b.category);
+  if (!groups.has(key)) groups.set(key, []);
+  groups.get(key).push(geo);
+}
+for (const [key, geoms] of groups) {
+  const [kind, cat] = key.split('|');
+  let color;
+  if (cat === 'zun') color = '#f5c542';
+  else if (cat === 'cctv') color = '#ff8c42';
+  else {
+    color = new THREE.Color(CATEGORY_COLORS[cat] || '#b0bec5');
+    if (kind === 'functional') color.lerp(new THREE.Color('#ffffff'), 0.3);
+  }
+  const mesh = new THREE.Mesh(mergeGeometries(geoms), toon(color));
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  if (cat === 'zun') landmarkMeshes.zun = mesh;
+  if (cat === 'cctv') landmarkMeshes.cctv = mesh;
+}
+
+// ---- 地名标签（importance ≥ 3：地标/地铁站/学校医院）----
+function makeLabel(text, importance) {
+  const cv = document.createElement('canvas');
+  const ctx = cv.getContext('2d');
+  const fs = 30;
+  ctx.font = `bold ${fs}px "PingFang SC", sans-serif`;
+  const w = Math.ceil(ctx.measureText(text).width) + 26;
+  cv.width = w; cv.height = 52;
+  const c2 = cv.getContext('2d');
+  c2.fillStyle = 'rgba(255,255,255,.88)';
+  c2.beginPath(); c2.roundRect(0, 0, w, 52, 12); c2.fill();
+  c2.font = `bold ${fs}px "PingFang SC", sans-serif`;
+  c2.fillStyle = importance === 5 ? '#b8860b' : importance === 4 ? '#2266aa' : '#2a9d8f';
+  c2.textAlign = 'center'; c2.textBaseline = 'middle';
+  c2.fillText(text, w / 2, 27);
+  const tex = new THREE.CanvasTexture(cv);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+  sp.scale.set(w * 1.35, 70, 1);
+  return sp;
+}
+let labelCount = 0;
+for (const l of labels) {
+  if (l.importance < 3 || !l.name) continue;
+  const sp = makeLabel(l.name, l.importance);
+  const near = buildings.find(b => b.name === l.name);
+  const y = near ? near.height_m + 55 : 70;
+  sp.position.set(l.pos[0], y, -l.pos[1]);
+  scene.add(sp);
+  labelCount++;
+}
+
+// ---- 相机与交互 ----
+function flyTo(target) {
+  if (target === 'all') {
+    camera.position.set(1500, 1500, 1400);
+    controls.target.set(1200, 0, -1200);
+  } else {
+    const b = buildings.find(x => x.landmark === target);
+    if (!b) return;
+    const [cx, cy] = b.center;
+    camera.position.set(cx + 420, b.height_m * 0.9 + 260, -cy + 480);
+    controls.target.set(cx, b.height_m * 0.45, -cy);
+  }
+}
+flyTo('all');
+document.querySelectorAll('#fly button').forEach(btn =>
+  btn.addEventListener('click', () => flyTo(btn.dataset.target)));
+
+document.getElementById('stats').textContent =
+  `${buildings.length} 建筑 · ${nData.roads.length} 道路 · ${labelCount} 地名标注`;
+const LEGEND = [['#f5c542', '中国尊'], ['#ff8c42', '央视大楼'], ['#5b8def', 'CBD'],
+  ['#f2a65a', '商业'], ['#8ecae6', '高层住宅'], ['#a7c957', '多层住宅'],
+  ['#2a9d8f', '学校'], ['#e76f51', '医院'], ['#95d5b2', '绿地'], ['#7ec8e3', '通惠河']];
+document.getElementById('legend').innerHTML =
+  LEGEND.map(([c, n]) => `<span><i style="background:${c}"></i>${n}</span>`).join('');
+
+document.getElementById('loading').remove();
+window.__READY = true;
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>

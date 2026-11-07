@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>CITY20 · 北京全域 · 成品预览</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #e8f1f6;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  #hud { position: fixed; top: 14px; left: 14px; z-index: 10; background: rgba(255,255,255,.92);
+    border-radius: 12px; padding: 12px 16px; box-shadow: 0 2px 12px rgba(0,0,0,.08); max-width: 330px; }
+  #hud h1 { font-size: 16px; margin: 0 0 4px; }
+  #hud .sub { font-size: 12px; color: #666; margin-bottom: 6px; line-height: 1.6; }
+  #hud .ops { font-size: 11px; color: #888; }
+  #legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; margin-top: 8px; }
+  #legend span { display: inline-flex; align-items: center; gap: 4px; }
+  #legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  #fly { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  #fly button { font-size: 12px; padding: 4px 10px; border: 1px solid #ddd; border-radius: 8px;
+    background: #fff; cursor: pointer; }
+  #fly button:hover { background: #f0f6ff; }
+  #stats { position: fixed; right: 14px; top: 14px; z-index: 10; font-size: 11px; color: #667;
+    background: rgba(255,255,255,.85); padding: 6px 10px; border-radius: 8px; text-align: right; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 15px; color: #567; z-index: 20; background: #e8f1f6; }
+</style>
+</head>
+<body>
+<div id="loading">正在加载北京全域数据包…</div>
+<div id="hud">
+  <h1>CITY20 · 北京全域</h1>
+  <div class="sub">东西朝海真实骨架 · 其余扩散+噪声生成<br>城区→乡村 urbanity 连续场渐变融合 · 西山/燕山噪声隆起</div>
+  <div class="ops">左键旋转 · 右键平移 · 滚轮缩放（标签随缩放分级显示）</div>
+  <div id="legend"></div>
+  <div id="fly">
+    <button data-t="all">全景</button>
+    <button data-t="zun">CBD·中国尊</button>
+    <button data-t="gugong">故宫</button>
+    <button data-t="niaochao">鸟巢</button>
+    <button data-t="village">乡村</button>
+    <button data-t="mountain">西山</button>
+  </div>
+</div>
+<div id="stats"></div>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from './vendor/OrbitControls.js';
+import { mergeGeometries } from './vendor/BufferGeometryUtils.js';
+
+const BASE = '/data/parcels/beijing_full/';
+const [parcel, bData, nData, lData] = await Promise.all(
+  ['parcel.json', 'buildings.json', 'network.json', 'labels.json']
+    .map(f => fetch(BASE + f).then(r => r.json())));
+const buildings = bData.buildings;
+const labels = lData.labels;
+const W = parcel.grid.cols, H = parcel.grid.rows, CELL = parcel.grid.cell_m;
+const T = parcel.terrain, E = parcel.elevation;
+const CX = W * CELL / 2, CY = H * CELL / 2;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#e8f1f6');
+scene.fog = new THREE.Fog('#e8f1f6', 120000, 400000);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+document.body.appendChild(renderer.domElement);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 10, 800000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.maxPolarAngle = Math.PI * 0.49;
+
+scene.add(new THREE.HemisphereLight('#ffffff', '#b8c4cc', 0.9));
+const sun = new THREE.DirectionalLight('#fff5e6', 1.5);
+sun.position.set(CX + 60000, 120000, -CY + 40000);
+scene.add(sun);
+
+const grad = new THREE.DataTexture(new Uint8Array([90, 160, 255]), 3, 1, THREE.RedFormat);
+grad.needsUpdate = true;
+grad.minFilter = grad.magFilter = THREE.NearestFilter;
+const toon = (c) => new THREE.MeshToonMaterial({ color: c, gradientMap: grad });
+
+// 角点高程（相邻 4 格均值，平滑无裂缝）
+function cornerH(c, r) {
+  let sum = 0, n = 0;
+  for (let rr = r - 1; rr <= r; rr++) for (let cc = c - 1; cc <= c; cc++) {
+    if (rr >= 0 && rr < H && cc >= 0 && cc < W) { sum += E[rr][cc]; n++; }
+  }
+  return n ? sum / n : 0;
+}
+function heightAt(x, y) {
+  const c = Math.max(0, Math.min(W - 1, Math.floor(x / CELL)));
+  const r = Math.max(0, Math.min(H - 1, Math.floor(y / CELL)));
+  return E[r][c];
+}
+
+// ---- 地形（顶点色 + 高程）----
+const TERRAIN_COLORS = {
+  flat: '#e9e5d6', road_inherited: '#a8aeb5', river: '#7ec8e3', bank: '#b8e0d2',
+  forest: '#8fcfa8', occupied: '#dcd4c2', hill: '#c9c2a8', farmland: '#d8e6b0',
+};
+document.getElementById('loading').textContent = '正在生成地形…';
+{
+  const pos = [], col = [], idx = [];
+  let vi = 0;
+  const colorCache = {};
+  for (const k in TERRAIN_COLORS) colorCache[k] = new THREE.Color(TERRAIN_COLORS[k]);
+  for (let r = 0; r < H; r++) {
+    const y0 = r * CELL, y1 = y0 + CELL;
+    for (let c = 0; c < W; c++) {
+      const color = colorCache[T[r][c]] || colorCache.flat;
+      const x0 = c * CELL, x1 = x0 + CELL;
+      pos.push(x0, cornerH(c, r), -y0, x1, cornerH(c + 1, r), -y0,
+               x1, cornerH(c + 1, r + 1), -y1, x0, cornerH(c, r + 1), -y1);
+      for (let k = 0; k < 4; k++) col.push(color.r, color.g, color.b);
+      idx.push(vi, vi + 2, vi + 1, vi, vi + 3, vi + 2);
+      vi += 4;
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  scene.add(new THREE.Mesh(g, new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: grad })));
+}
+
+// ---- 道路/水系 ribbon（数组累积一次构建，避免逐段 Geometry 爆内存）----
+const ROAD_W = { motorway: 90, trunk: 80, primary: 65, secondary: 45, tertiary: 30 };
+function ribbonGeometry(lines, widthOf, lift) {
+  const pos = [];
+  for (const { kind, line: pts } of lines) {
+    const w = widthOf(kind);
+    for (let i = 0; i < pts.length - 1; i++) {
+      const [x0, y0] = pts[i], [x1, y1] = pts[i + 1];
+      const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy);
+      if (len < 0.01) continue;
+      const nx = -dy / len * w / 2, ny = dx / len * w / 2;
+      const h0 = heightAt(x0, y0) + lift, h1 = heightAt(x1, y1) + lift;
+      pos.push(x0 + nx, h0, -(y0 + ny), x0 - nx, h0, -(y0 - ny), x1 - nx, h1, -(y1 - ny),
+               x0 + nx, h0, -(y0 + ny), x1 - nx, h1, -(y1 - ny), x1 + nx, h1, -(y1 + ny));
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+  return g;
+}
+scene.add(new THREE.Mesh(ribbonGeometry(nData.roads, k => ROAD_W[k] || 25, 4), toon('#7d858d')));
+// 水系：线状 ribbon + 面状多边形
+{
+  const waterLines = (nData.water || []).filter(w => w.line);
+  if (waterLines.length) {
+    scene.add(new THREE.Mesh(ribbonGeometry(waterLines, k => k === 'river' ? 50 : 16, 3),
+      toon('#6fb7e8')));
+  }
+  const areaGeoms = [];
+  for (const w of (nData.water || []).filter(w => w.footprint)) {
+    const shape = new THREE.Shape();
+    w.footprint.forEach(([x, y], i) => i === 0 ? shape.moveTo(x, y) : shape.lineTo(x, y));
+    const g = new THREE.ShapeGeometry(shape);
+    g.rotateX(-Math.PI / 2);
+    const cx = w.footprint[0][0], cy = w.footprint[0][1];
+    g.translate(0, heightAt(cx, cy) + 2, 0);
+    areaGeoms.push(g);
+  }
+  if (areaGeoms.length) scene.add(new THREE.Mesh(mergeGeometries(areaGeoms), toon('#6fb7e8')));
+}
+
+// ---- 建筑：generated 用 Box（省顶点），地标/功能用 Extrude ----
+const CATEGORY_COLORS = {
+  cbd: '#5b8def', shop: '#f2a65a', res_high: '#8ecae6', res_mid: '#a7c957',
+  res_low: '#c8d98a', light_industry: '#b088f9', school: '#2a9d8f', hospital: '#e76f51',
+};
+document.getElementById('loading').textContent = '正在生成建筑…';
+const groups = new Map();
+const boxTemplate = new THREE.BoxGeometry(1, 1, 1);
+boxTemplate.translate(0, 0.5, 0);
+for (const b of buildings) {
+  let geo;
+  if (b.kind === 'generated') {
+    const f = b.footprint;
+    const w = Math.abs(f[1][0] - f[0][0]), d = Math.abs(f[2][1] - f[1][1]);
+    geo = boxTemplate.clone();
+    geo.scale(w, b.height_m, d);
+    const base = heightAt(b.center[0], b.center[1]);
+    geo.translate(b.center[0], base, -b.center[1]);
+  } else {
+    const shape = new THREE.Shape();
+    b.footprint.forEach(([x, y], i) => i === 0 ? shape.moveTo(x, y) : shape.lineTo(x, y));
+    geo = new THREE.ExtrudeGeometry(shape, { depth: b.height_m, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2);
+    geo.translate(0, heightAt(b.center[0], b.center[1]), 0);
+  }
+  const key = b.kind + '|' + (b.landmark || b.category);
+  if (!groups.has(key)) groups.set(key, []);
+  groups.get(key).push(geo);
+}
+for (const [key, geoms] of groups) {
+  const [kind, cat] = key.split('|');
+  let color;
+  if (cat === 'zun') color = '#f5c542';
+  else if (cat === 'cctv') color = '#ff8c42';
+  else if (kind === 'landmark') color = '#e2574c';
+  else {
+    color = new THREE.Color(CATEGORY_COLORS[cat] || '#b0bec5');
+    if (kind === 'functional') color.lerp(new THREE.Color('#ffffff'), 0.3);
+  }
+  scene.add(new THREE.Mesh(mergeGeometries(geoms), toon(color)));
+}
+
+// ---- 标签（LOD 分级）----
+const labelSprites = [];
+function makeLabel(text, importance) {
+  const cv = document.createElement('canvas');
+  const fs = 34;
+  let ctx = cv.getContext('2d');
+  ctx.font = `bold ${fs}px "PingFang SC", sans-serif`;
+  const w = Math.ceil(ctx.measureText(text).width) + 30;
+  cv.width = w; cv.height = 60;
+  ctx = cv.getContext('2d');
+  ctx.fillStyle = 'rgba(255,255,255,.9)';
+  ctx.beginPath(); ctx.roundRect(0, 0, w, 60, 14); ctx.fill();
+  ctx.font = `bold ${fs}px "PingFang SC", sans-serif`;
+  ctx.fillStyle = importance === 5 ? '#b8860b' : importance === 4 ? '#2266aa' : '#2a9d8f';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(text, w / 2, 31);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(cv), depthTest: false, fog: false }));
+  sp.userData.ratio = w / 60;
+  return sp;
+}
+const landmarkHeight = new Map();
+for (const b of buildings) {
+  if (b.kind === 'landmark' && b.name) landmarkHeight.set(b.name, b.height_m);
+}
+const seenLabel = new Set();
+for (const l of labels) {
+  if (l.importance < 3 || !l.name) continue;
+  const key = l.name + '|' + Math.round(l.pos[0] / 1000) + '|' + Math.round(l.pos[1] / 1000);
+  if (seenLabel.has(key)) continue;
+  seenLabel.add(key);
+  const sp = makeLabel(l.name, l.importance);
+  const lh = landmarkHeight.get(l.name);
+  const y = lh !== undefined ? lh + 250 : heightAt(l.pos[0], l.pos[1]) + 350;
+  sp.position.set(l.pos[0], y, -l.pos[1]);
+  sp.userData.importance = l.importance;
+  scene.add(sp);
+  labelSprites.push(sp);
+}
+function updateLabels() {
+  const h = camera.position.y;
+  const base = Math.max(60, h * 0.02);
+  for (const sp of labelSprites) {
+    const imp = sp.userData.importance;
+    sp.visible = imp === 5 || (imp === 4 && h < 45000) || (imp === 3 && h < 9000);
+    const s = base * (imp === 5 ? 1.5 : 1.0);
+    sp.scale.set(s * sp.userData.ratio, s, 1);
+  }
+}
+
+// ---- 导航 ----
+const firstVillage = buildings.find(b => b.settlement === 'rural');
+function flyTo(t) {
+  let pos, tgt;
+  if (t === 'all') {
+    pos = [CX + 20000, 105000, -CY + 95000]; tgt = [CX, 0, -CY];
+  } else if (t === 'village' && firstVillage) {
+    const [x, y] = firstVillage.center;
+    pos = [x + 1200, 1500, -y + 1600]; tgt = [x, 0, -y];
+  } else if (t === 'mountain') {
+    pos = [CX - 45000, 22000, -CY - 30000]; tgt = [CX - 55000, 800, -CY - 45000];
+  } else {
+    const b = buildings.find(x => x.landmark === t || (t === 'gugong' && x.landmark === 'gugong'));
+    if (!b) return;
+    const [x, y] = b.center;
+    pos = [x + 2000, 2600, -y + 2600]; tgt = [x, 150, -y];
+  }
+  camera.position.set(...pos);
+  controls.target.set(...tgt);
+}
+flyTo('all');
+document.querySelectorAll('#fly button').forEach(b => b.addEventListener('click', () => flyTo(b.dataset.t)));
+
+const nUrban = buildings.filter(b => b.settlement === 'urban').length;
+const nRural = buildings.filter(b => b.settlement === 'rural').length;
+document.getElementById('stats').innerHTML =
+  `${W}×${H} 格 @200m · ${(W * CELL / 1000).toFixed(0)}×${(H * CELL / 1000).toFixed(0)}km<br>` +
+  `${buildings.length} 建筑（城市 ${nUrban} / 乡村 ${nRural} / 功能地标 ${buildings.length - nUrban - nRural}）<br>` +
+  `${nData.roads.length} 真实道路 · ${labels.length} 真实地名`;
+const LEGEND = [['#f5c542', '中国尊'], ['#e2574c', '地标'], ['#5b8def', 'CBD'], ['#f2a65a', '商业'],
+  ['#8ecae6', '高层住宅'], ['#a7c957', '多层'], ['#c8d98a', '乡村民居'], ['#8fcfa8', '林地'],
+  ['#d8e6b0', '农田'], ['#c9c2a8', '山地'], ['#7ec8e3', '水系']];
+document.getElementById('legend').innerHTML =
+  LEGEND.map(([c, n]) => `<span><i style="background:${c}"></i>${n}</span>`).join('');
+
+document.getElementById('loading').remove();
+window.__READY = true;
+setInterval(updateLabels, 400);
+updateLabels();
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>
