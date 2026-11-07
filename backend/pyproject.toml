@@ -8,6 +8,7 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.4",
     "pyyaml>=6",
+    "sse-starlette>=2",
 ]
 
 [project.optional-dependencies]

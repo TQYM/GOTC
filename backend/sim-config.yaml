@@ -23,4 +23,12 @@ generation:
   height_limit_m: [60, 100]
   green_line_m: 30
 
+economy:
+  initial_funds: 5000000      # 初始财政（03 §8）
+  demolish_refund: 0.3        # 拆除返还比例（03 §3）
+  build_minutes: 15           # 建设期时长（01 §5）
+  polish_minutes: 2           # 微调期时长
+  briefing_sec: 20            # 开局简报时长
+  projection_years: 10        # 终局推演年数
+
 briefing_template: "本地块限高{height_limit_m}m，河道两侧{green_line_m}m绿线，省道保留不可拆。可建设率约{buildable_pct}%。"
