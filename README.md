@@ -4,7 +4,7 @@
 
 一款 **AI 驱动的城市规划模拟沙盘**：随机生成待开发地块，玩家需要完成分区、道路与公共配套规划；三套 AI 系统（数据大脑 / 市民之声 / 规划导师）实时推演并回应你的每个决策，终局生成城市规划诊断报告。
 
-本仓库为 **48 小时极限开发** 比赛项目，技术栈：Next.js（前端）· FastAPI（后端）· DeepSeek / Qwen / Kimi / GLM（AI 层）。
+本仓库为 **48 小时极限开发** 比赛项目，技术栈：Next.js（前端）· FastAPI（后端）· DeepSeek / Qwen / Kimi / GLM（AI 层）· Tauri / Capacitor（macOS / Windows / Android / iOS 四端壳，见 [docs/plan/09-cross-platform.md](docs/plan/09-cross-platform.md)）。
 
 ## 团队成员
 

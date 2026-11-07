@@ -14,7 +14,8 @@
 | [05-frontend.md](05-frontend.md) | 前端规格：路由、组件树、状态、渲染、视觉 | 前端 |
 | [06-backend.md](06-backend.md) | 后端规格：模块、目录、依赖、配置 | 后端 |
 | [07-qa-ops.md](07-qa-ops.md) | 测试策略、CI、本地联调、环境变量 | 所有人 |
-| [08-pr-tasks.md](08-pr-tasks.md) | **18 张 PR 任务卡**，按依赖排序 | 所有人 |
+| [08-pr-tasks.md](08-pr-tasks.md) | **22 张 PR 任务卡**，按依赖排序 | 所有人 |
+| [09-cross-platform.md](09-cross-platform.md) | 四端适配：Capacitor / Tauri 壳、触屏交互、打包分发 | 前端 |
 
 ## 铁律（所有 PR 必须遵守）
 
