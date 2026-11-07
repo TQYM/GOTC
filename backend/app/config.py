@@ -48,6 +48,7 @@ class EconomyConfig(BaseModel):
     polish_minutes: int = Field(ge=1)
     briefing_sec: int = Field(ge=1)
     projection_years: int = Field(ge=1)
+    year_seconds: int = Field(default=300, ge=1)  # 1 游戏年 = 300 现实秒（build 期，03 §5）
 
 
 class ResidentialConfig(BaseModel):
@@ -81,6 +82,14 @@ class TrafficConfig(BaseModel):
     unreachable_share_threshold: float = Field(default=0.05, ge=0.0, le=1.0)
 
 
+class PollutionConfig(BaseModel):
+    """03 §8 污染参数。"""
+
+    pollution_heavy: float = Field(ge=0.0)
+    pollution_light: float = Field(ge=0.0)
+    pollution_decay: float = Field(ge=0.0)
+
+
 class SimConfig(BaseModel):
     """03 §8 参数表。"""
 
@@ -91,6 +100,7 @@ class SimConfig(BaseModel):
     residential: ResidentialConfig
     employment: EmploymentConfig
     traffic: TrafficConfig
+    pollution: PollutionConfig
     briefing_template: str
 
 

@@ -29,6 +29,7 @@ economy:
   build_minutes: 15           # 建设期时长（01 §5）
   polish_minutes: 2           # 微调期时长
   briefing_sec: 20            # 开局简报时长
+  year_seconds: 300           # 1 游戏年 = 300 现实秒（build 期，03 §5）
   projection_years: 10        # 终局推演年数
 
 residential:
@@ -52,5 +53,10 @@ traffic:
   metro_coverage_m: 600       # 「地铁沿线」实现半径（03 未定量，PR-07 取地价同口径 600m）
   unreachable_penalty_min: 20 # 不可达比例超阈值时的通勤惩罚（03 §4.7）
   unreachable_share_threshold: 0.05
+
+pollution:
+  pollution_heavy: 0.35       # 重工业污染强度（03 §8）
+  pollution_light: 0.15       # 轻工业污染强度
+  pollution_decay: 0.05       # 每格曼哈顿距离线性衰减
 
 briefing_template: "本地块限高{height_limit_m}m，河道两侧{green_line_m}m绿线，省道保留不可拆。可建设率约{buildable_pct}%。"
