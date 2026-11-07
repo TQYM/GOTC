@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.api.playback import ensure_playback
 from app.api.sessions import get_registry, narrator
 from app.api.sessions import router as sessions_router
 from app.api.stream import sse_endpoint
@@ -34,7 +35,10 @@ async def _mentor_loop() -> None:
         await asyncio.sleep(MENTOR_POLL_SEC)
         for session in get_registry().active_sessions():
             try:
-                await narrator.mentor_comment(session)
+                if session.finalized:
+                    ensure_playback(session, narrator)  # polish 超时自动 finalize 的播放兜底
+                else:
+                    await narrator.mentor_comment(session)
             except Exception:  # 单会话失败不影响其他会话
                 log.exception("mentor comment failed: %s", session.session_id)
 

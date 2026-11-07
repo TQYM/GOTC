@@ -11,6 +11,7 @@ from app.core.session import GameSession
 
 log = logging.getLogger(__name__)
 TICK_INTERVAL_SEC = 1.0
+HEARTBEAT_INTERVAL_SEC = 15.0  # 02 §3.8：每 15s 一条空 delta tick
 
 
 async def session_timer(session: GameSession) -> None:
@@ -32,3 +33,27 @@ def start_timer(session: GameSession) -> asyncio.Task | None:
     except RuntimeError:
         return None
     return loop.create_task(session_timer(session))
+
+
+async def session_heartbeat(
+    session: GameSession, interval: float = HEARTBEAT_INTERVAL_SEC
+) -> None:
+    """15s 心跳（06 §4）：finalize 后仍跳动，直到会话被清扫。"""
+    try:
+        while not session.closed:
+            await asyncio.sleep(interval)
+            session.publish_heartbeat()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log.exception("session %s heartbeat failed", session.session_id)
+
+
+def start_heartbeat(
+    session: GameSession, interval: float = HEARTBEAT_INTERVAL_SEC
+) -> asyncio.Task | None:
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return None
+    return loop.create_task(session_heartbeat(session, interval))

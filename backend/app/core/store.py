@@ -6,7 +6,7 @@ import time
 
 from app.config import SimConfig
 from app.core.session import GameSession
-from app.core.timer import start_timer
+from app.core.timer import start_heartbeat, start_timer
 from app.sim.generator import generate_parcel
 
 SESSION_TTL_SEC = 40 * 60  # 创建后 40 分钟无操作清除（06 §3）
@@ -33,6 +33,9 @@ class SessionRegistry:
             task = start_timer(session)
             if task is not None:
                 self._tasks[session.session_id] = task
+            heartbeat = start_heartbeat(session)
+            if heartbeat is not None:
+                self._tasks[session.session_id + ":heartbeat"] = heartbeat
         return session
 
     def get(self, session_id: str) -> GameSession | None:
