@@ -12,12 +12,12 @@ from dataclasses import dataclass, field
 from app.config import SimConfig
 from app.contracts.common import Source
 from app.contracts.errors import ErrorCode
-from app.contracts.events import Report, ReportDimensions
 from app.contracts.finalize import FinalizeResult
 from app.contracts.metrics import Metrics, MetricsDiff, Phase
 from app.contracts.parcel import Parcel, Terrain
 from app.contracts.tile import Tile, TileType
 from app.core.errors import GameError
+from app.core.report import build_template_report
 from app.sim import engine
 from app.sim.catalog import CATALOG, GREEN_TYPES, bridge_cells, expand_cells, placement_cost
 from app.sim.events import modifier_for, roll_event
@@ -256,17 +256,8 @@ class GameSession:
             cleared_forest=self.cleared_forest,
         )
         city_name = CITY_NAMES[self.parcel.seed % len(CITY_NAMES)]
-        report = Report(  # PR-12 换规划导师完整三段式（AI 可改写并标 source=ai）
-            overview=f"{city_name}走过了十个年头。总体诊断详版由规划导师在 PR-12 生成。",
-            dimensions=ReportDimensions(
-                population=f"人口 {outcome.projection[-1].metrics.population}。",
-                balance=f"职住比 {outcome.projection[-1].metrics.job_res_ratio}。",
-                green=f"绿地率 {outcome.projection[-1].metrics.green_ratio:.0%}。",
-                traffic=f"平均通勤 {outcome.projection[-1].metrics.avg_commute} 分钟。",
-                happiness=f"幸福度 {outcome.projection[-1].metrics.happiness}。",
-            ),
-            ending_story=f"结局：{outcome.ending.value}。完整故事由规划导师在 PR-12 生成。",
-            source=Source.TEMPLATE,
+        report = build_template_report(  # AI 版由 narrate 层在 report_ready 时覆盖（source=ai）
+            city_name, outcome.projection[-1].metrics, outcome.scores, outcome.ending
         )
         self.finalize_result = FinalizeResult(
             phase=Phase.LOCKED,

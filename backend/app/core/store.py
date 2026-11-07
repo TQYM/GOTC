@@ -64,6 +64,10 @@ class SessionRegistry:
         for session in self._sessions.values():
             session.closed = True
 
+    def active_sessions(self) -> list[GameSession]:
+        """供 mentor 调度等遍历（未关闭会话）。"""
+        return [session for session in self._sessions.values() if not session.closed]
+
     def count(self) -> int:
         self._sweep()
         return len(self._sessions)
