@@ -69,7 +69,7 @@ async def get_state(session: Annotated[GameSession, Depends(get_session)]) -> Se
         time_left_sec=session.time_left_sec,
         parcel=session.parcel,
         tiles=list(session.tiles.values()),
-        metrics=session._stub_metrics(),
+        metrics=session.metrics,
         placements_count=session.placements_count,
     )
 

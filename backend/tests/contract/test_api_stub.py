@@ -85,7 +85,9 @@ class TestPlace:
         assert data["tile"]["type"] == "res_mid"
         assert data["tile"]["anchor"] == anchor
         assert data["metrics"]["funds"] == 5_000_000 - 220_000
-        assert data["metrics_diff"]["delta"]["funds"] == -220_000
+        # 02 §2.2：delta 只带变化字段的新值
+        assert data["metrics_diff"]["delta"]["funds"] == 5_000_000 - 220_000
+        assert data["metrics_diff"]["delta"]["population"] == 855
         assert data["funds_after"] == 5_000_000 - 220_000
 
     def test_place_on_river_rejected(self, client):
@@ -98,6 +100,9 @@ class TestPlace:
         err = resp.json()["error"]
         assert err["code"] == "invalid_placement"
         assert err["details"]["cells"]
+        # 02 §3.3：失败响应附最新 metrics 与 funds_after
+        assert err["details"]["funds_after"] == 5_000_000
+        assert err["details"]["metrics"]["population"] == 0
 
     def test_place_out_of_bounds(self, client):
         sid = create(client)["session_id"]
@@ -177,7 +182,8 @@ class TestRemove:
         data = resp.json()
         assert data["tile"]["id"] == placed["tile"]["id"]
         assert data["funds_after"] == 5_000_000 - 220_000 + refund
-        assert data["metrics_diff"]["delta"]["funds"] == refund
+        assert data["metrics_diff"]["delta"]["funds"] == 5_000_000 - 220_000 + refund
+        assert data["metrics_diff"]["delta"]["population"] == 0
         state = client.get(f"/api/sessions/{sid}").json()
         assert state["tiles"] == []
         assert state["placements_count"] == 1

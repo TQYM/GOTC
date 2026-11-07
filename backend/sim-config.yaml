@@ -31,4 +31,15 @@ economy:
   briefing_sec: 20            # 开局简报时长
   projection_years: 10        # 终局推演年数
 
+residential:
+  capacity_res_low: 300       # 住宅容量（03 §8）
+  capacity_res_mid: 900
+  capacity_res_high: 2400
+
+employment:
+  jobs_shop: 80               # 岗位数（03 §8）
+  jobs_cbd: 1200
+  jobs_light: 900
+  jobs_heavy: 2600
+
 briefing_template: "本地块限高{height_limit_m}m，河道两侧{green_line_m}m绿线，省道保留不可拆。可建设率约{buildable_pct}%。"

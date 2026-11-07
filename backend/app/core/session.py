@@ -1,7 +1,8 @@
 """会话对象（06 §3）：一局游戏的全过程状态。
 
-PR-03 为桩实现：放置校验（阶段/边界/地形/占用/资金）为真逻辑，
-指标为静态样例（PR-06 换真引擎），finalize 返回内置推演样例。
+PR-06 起 place/remove 接真引擎（03 §4.1–4.6、4.11、4.12 全量重算）；
+失败响应附最新 metrics 与 funds_after（02 §3.3）；
+finalize 仍为桩推演（真 10 年推演随 PR-08 落地）。
 """
 
 import asyncio
@@ -16,6 +17,7 @@ from app.contracts.metrics import Metrics, MetricsDiff, Phase
 from app.contracts.parcel import Parcel, Terrain
 from app.contracts.tile import Tile, TileType
 from app.core.errors import GameError
+from app.sim import engine
 from app.sim.catalog import CATALOG, GREEN_TYPES, expand_cells, placement_cost
 
 TILE_ID_PREFIX = "tile_"
@@ -35,6 +37,7 @@ class GameSession:
     placements_count: int = 0
     tiles: dict[str, Tile] = field(default_factory=dict)
     occupied: dict[tuple[int, int], str] = field(default_factory=dict)
+    metrics: Metrics | None = None
     finalized: bool = False
     finalize_result: FinalizeResult | None = None
     created_at: float = field(default_factory=time.monotonic)
@@ -44,8 +47,29 @@ class GameSession:
     def __post_init__(self) -> None:
         if self.funds == 0:
             self.funds = self.config.economy.initial_funds
+        self._recompute()
 
-    # ---- 校验（03 §3 流程，桩阶段实现到第 5 步） ----
+    # ---- 引擎 ----
+
+    def _recompute(self) -> None:
+        """全量重算并缓存（03 §1：每次操作后从头算一遍）。"""
+        self.metrics = engine.recompute(
+            self.parcel,
+            list(self.tiles.values()),
+            self.config,
+            funds=self.funds,
+            at_phase=self.phase,
+        )
+
+    def _attach_state_to_error(self, exc: GameError) -> GameError:
+        """02 §3.3：失败响应附最新 metrics 与 funds_after。"""
+        details = dict(exc.details or {})
+        details["metrics"] = self.metrics.model_dump() if self.metrics else None
+        details["funds_after"] = self.funds
+        exc.details = details
+        return exc
+
+    # ---- 校验（03 §3 流程） ----
 
     def _touch(self) -> None:
         self.last_active = time.monotonic()
@@ -107,13 +131,16 @@ class GameSession:
         self, tile_type: TileType, anchor: list[int]
     ) -> tuple[Tile, Metrics, MetricsDiff, int]:
         self._touch()
-        self._check_phase()
-        cells = expand_cells(tile_type, anchor)
-        self._check_cells_placeable(tile_type, cells)
-        cost = placement_cost(tile_type, cells, self.parcel.terrain)
-        self._check_funds(cost)
+        try:
+            self._check_phase()
+            cells = expand_cells(tile_type, anchor)
+            self._check_cells_placeable(tile_type, cells)
+            cost = placement_cost(tile_type, cells, self.parcel.terrain)
+            self._check_funds(cost)
+        except GameError as exc:
+            raise self._attach_state_to_error(exc) from exc
 
-        before = self.funds
+        before = self.metrics
         self.funds -= cost
         tile = Tile(
             id=TILE_ID_PREFIX + secrets.token_hex(4),
@@ -131,37 +158,38 @@ class GameSession:
         for r, c in cells:
             self.occupied[(r, c)] = tile.id
         self.placements_count += 1
-
-        metrics = self._stub_metrics()
-        diff = MetricsDiff(at_year=metrics.at_year, delta={"funds": self.funds - before})
-        return tile, metrics, diff, self.funds
+        self._recompute()
+        return tile, self.metrics, engine.metrics_diff(before, self.metrics), self.funds
 
     def remove(self, tile_id: str) -> tuple[Tile, Metrics, MetricsDiff, int]:
         self._touch()
-        self._check_phase()
-        tile = self.tiles.get(tile_id)
-        if tile is None:
-            raise GameError(
-                ErrorCode.INVALID_PLACEMENT,
-                f"区块 {tile_id} 不存在",
-                details={"tile_id": tile_id},
-            )
+        try:
+            self._check_phase()
+            tile = self.tiles.get(tile_id)
+            if tile is None:
+                raise GameError(
+                    ErrorCode.INVALID_PLACEMENT,
+                    f"区块 {tile_id} 不存在",
+                    details={"tile_id": tile_id},
+                )
+        except GameError as exc:
+            raise self._attach_state_to_error(exc) from exc
         cost = placement_cost(tile.type, tile.cells, self.parcel.terrain)
         refund = -(-cost * int(self.config.economy.demolish_refund * 100) // 100)  # ceil(cost×0.3)
-        before = self.funds
+        before = self.metrics
         self.funds += refund
         for r, c in tile.cells:
             self.occupied.pop((r, c), None)
         del self.tiles[tile_id]
-        metrics = self._stub_metrics()
-        diff = MetricsDiff(at_year=metrics.at_year, delta={"funds": self.funds - before})
-        return tile, metrics, diff, self.funds
+        self._recompute()
+        return tile, self.metrics, engine.metrics_diff(before, self.metrics), self.funds
 
     def advance(self) -> tuple[Phase, int]:
         self._touch()
         if self.phase is Phase.BRIEFING:
             self.phase = Phase.BUILD
             self.time_left_sec = self.config.economy.build_minutes * 60
+            self._recompute()
             return self.phase, self.time_left_sec
         raise GameError(
             ErrorCode.INVALID_PHASE,
@@ -181,34 +209,15 @@ class GameSession:
             )
         self.phase = Phase.LOCKED
         self.time_left_sec = 0
+        self._recompute()
         self.finalize_result = self._stub_finalize()
         self.finalized = True
         return self.finalize_result
 
-    # ---- 桩数据（PR-06 由真引擎替换） ----
-
-    def _stub_metrics(self) -> Metrics:
-        return Metrics(
-            at_year=1,
-            at_phase=self.phase,
-            funds=self.funds,
-            population=0,
-            jobs=0,
-            job_res_ratio=0.0,
-            land_price_index=100.0,
-            green_ratio=0.0,
-            avg_commute=0,
-            congestion=0.0,
-            pollution=0.0,
-            happiness=50,
-            tax_income=0,
-            upkeep=sum(t.upkeep for t in self.tiles.values()),
-            coverage_edu=0.0,
-            coverage_med=0.0,
-        )
+    # ---- 桩推演（PR-08 由真 10 年快进替换） ----
 
     def _stub_finalize(self) -> FinalizeResult:
-        base = self._stub_metrics()
+        base = self.metrics
         projection = [
             ProjectionYear(year=year, metrics=base, events=[] if year % 3 else ["人口流入放缓"])
             for year in range(4, 4 + self.config.economy.projection_years)
