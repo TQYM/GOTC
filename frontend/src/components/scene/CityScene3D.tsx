@@ -55,6 +55,8 @@ export interface CityScene3DProps {
   overlay?: { cells: Cell[]; color: string } | null;
   /** 右键单击（无拖拽）：退出当前工具（13 §4.1） */
   onRightClick?: () => void;
+  /** 单击空白（没点到任何格）：关闭详情卡等二级界面 */
+  onEmptyClick?: () => void;
   /** 画布光标样式（放置 / 拆除模式换光标） */
   cursor?: string;
   /** 值变化时相机回到默认鸟瞰 */
@@ -134,6 +136,7 @@ export default function CityScene3D({
   resetViewSignal = 0,
   overlay = null,
   onRightClick,
+  onEmptyClick,
   cursor,
   debugHook = false,
   className,
@@ -197,7 +200,10 @@ export default function CityScene3D({
         camera={{ position: camPos, fov: 35, near: 10, far: extent * 8 }}
         flat
         gl={{ antialias: true, powerPreference: "high-performance" }}
-        onPointerMissed={() => handleHover(null)}
+        onPointerMissed={() => {
+          handleHover(null);
+          onEmptyClick?.();
+        }}
       >
         <color attach="background" args={[SCENE_COLORS.background]} />
         <fog

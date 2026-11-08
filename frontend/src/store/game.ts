@@ -20,6 +20,7 @@ import type {
   TileType,
 } from "@/lib/contract";
 import type { OperationResult, ReportResult, SharedPhase } from "@/lib/contractV2";
+import type { BuildingsFile, ExistingAsset } from "@saves/lib/types";
 import {
   ApiError,
   toGamePhase,
@@ -105,6 +106,10 @@ interface GameState {
   cityReport: CityReport | null;
   reportHistory: ReportResult[];
   bridgeOrientation: "horizontal" | "vertical";
+  /** 二级界面：当前选中的格子（null = 未选中，详情卡收起） */
+  selected: Cell | null;
+  /** 既有建筑索引（"r:c" → asset），来自数据包 buildings.json，用于点选详情与拆除 */
+  existingAssets: Record<string, ExistingAsset>;
   /** 已应用的最大推送 id：阶段类事件按 id 单调前进，乱序/重放的旧事件被忽略 */
   phaseEventId: number;
   lastEventId: number;
@@ -128,7 +133,15 @@ interface GameState {
   exitTool(): void;
   startPlanning(): Promise<void>;
   placeAt(anchor: Cell): Promise<void>;
+  /** 指定类型就地建造（详情卡里的「在这里建」入口，不依赖当前工具） */
+  buildAt(type: TileType, anchor: Cell): Promise<void>;
   redevelopAt(c: Cell): Promise<void>;
+  /** 选中/取消选中格子，驱动二级详情界面 */
+  selectAt(cell: Cell | null): void;
+  /** 拉取既有建筑索引（点选详情与拆除用）；失败不阻塞游戏 */
+  loadExistingAssets(): Promise<void>;
+  /** 拆除地图上的既有建筑（后端 redevelop：付拆迁费、扣除现状人口岗位、幸福度 −5） */
+  demolishExisting(anchor: Cell): Promise<void>;
   setBridgeOrientation(value: "horizontal" | "vertical"): void;
   loadReports(): Promise<void>;
   openReport(result: ReportResult): void;
@@ -272,6 +285,8 @@ export const useGame = create<GameState>()((set, get) => {
     cityReport: null,
     reportHistory: [],
     bridgeOrientation: "horizontal",
+    selected: null,
+    existingAssets: {},
     phaseEventId: -1,
     lastEventId: -1,
     conn: "connecting",
@@ -294,6 +309,8 @@ export const useGame = create<GameState>()((set, get) => {
         tiles: [],
         metrics: null,
         redevelopedAssetIds: [],
+        selected: null,
+        existingAssets: {},
         projection: [],
         projectionYear: 0,
         projectionId: null,
@@ -307,6 +324,7 @@ export const useGame = create<GameState>()((set, get) => {
       try {
         get().applySnapshot(await api.load(id));
         set({ status: "ready" });
+        void get().loadExistingAssets();
       } catch (e) {
         const msg = e instanceof ApiError ? humanizeError(e).title : "加载失败";
         set({ status: "error", loadError: msg });
@@ -601,16 +619,23 @@ export const useGame = create<GameState>()((set, get) => {
     },
 
     async placeAt(anchor) {
-      const { api, id, tool, parcel, tiles, metrics, busy, phase, bridgeOrientation } = get();
-      if (!api || !id || !parcel || tool.kind !== "place" || busy) return;
+      const tool = get().tool;
+      if (tool.kind !== "place") return;
+      await get().buildAt(tool.type, anchor);
+    },
+
+    /** 就地建造：详情卡与卡牌工具共用同一套校验、请求与结果处理 */
+    async buildAt(type, anchor) {
+      const { api, id, parcel, tiles, metrics, busy, phase, bridgeOrientation } = get();
+      if (!api || !id || !parcel || busy) return;
       if (phase !== "building") return;
       const chk = checkPlacement(
         parcel,
         occupiedSet(tiles),
         metrics?.funds ?? null,
-        tool.type,
+        type,
         anchor,
-        tool.type === "util_bridge" ? bridgeOrientation : undefined,
+        type === "util_bridge" ? bridgeOrientation : undefined,
       );
       if (!chk.ok) {
         // 非法格禁止落下：不发请求，只给人话原因
@@ -618,7 +643,6 @@ export const useGame = create<GameState>()((set, get) => {
         return;
       }
       set({ busy: true });
-      const type = tool.type;
       try {
         const r = await api.place(id, {
           type,
@@ -639,7 +663,61 @@ export const useGame = create<GameState>()((set, get) => {
           hint: `花费 ${yuan(metrics ? metrics.funds - r.funds_after : chk.cost)}${chk.warning ? ` · ${chk.warning}` : ""}`,
         });
       } catch (e) {
-        fail(e, chk.reason, () => void get().placeAt(anchor));
+        fail(e, chk.reason, () => void get().buildAt(type, anchor));
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    selectAt(cell) {
+      set({ selected: cell });
+    },
+
+    async loadExistingAssets() {
+      const { parcel } = get();
+      const url = parcel?.buildings_url;
+      if (!url) return;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const file = (await res.json()) as BuildingsFile;
+        const map: Record<string, ExistingAsset> = {};
+        for (const list of Object.values(file.chunks ?? {})) {
+          for (const asset of list) {
+            for (const [r, c] of asset.cells) map[`${r}:${c}`] = asset;
+          }
+        }
+        set({ existingAssets: map });
+      } catch {
+        /* 索引失败只影响详情卡，不阻塞建设玩法 */
+      }
+    },
+
+    async demolishExisting(anchor) {
+      const { api, id, busy, phase, existingAssets } = get();
+      if (!api?.redevelop || !id || busy) return;
+      if (phase !== "building") return;
+      const asset = existingAssets[`${anchor[0]}:${anchor[1]}`];
+      if (!asset) {
+        get().toast({ tone: "info", title: "这个格子没有既有建筑" });
+        return;
+      }
+      if (busy) return;
+      set({ busy: true });
+      try {
+        const result = await api.redevelop(id, anchor);
+        applyOperation(result);
+        const detail = result.redevelopment;
+        get().toast({
+          tone: "ok",
+          title: detail?.asset_id ? `已拆除${asset.name ?? "既有建筑"}` : "已拆除既有建筑",
+          hint: detail
+            ? `释放 ${detail.cells.length} 格 · 拆迁 ${yuan(detail.demolition_cost)} · 幸福度 ${detail.happiness_delta}`
+            : undefined,
+        });
+        set({ selected: null });
+      } catch (e) {
+        fail(e, null, () => void get().demolishExisting(anchor));
       } finally {
         set({ busy: false });
       }
@@ -721,8 +799,8 @@ export const useGame = create<GameState>()((set, get) => {
     },
 
     requestRemoveAt(cell) {
-      const { parcel, tiles, tool, busy } = get();
-      if (!parcel || tool.kind !== "remove" || busy) return;
+      const { parcel, tiles, busy } = get();
+      if (!parcel || busy) return;
       const tile = tileAt(tiles, cell);
       if (!tile) {
         get().toast({ tone: "info", title: "这里没有可以拆的建筑" });

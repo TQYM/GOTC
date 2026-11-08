@@ -31,6 +31,7 @@ import PhaseBanner from "./PhaseBanner";
 import ReportSummary from "./ReportSummary";
 import RemoveConfirm from "./RemoveConfirm";
 import Toasts from "./Toasts";
+import TileSheet from "@/components/hud/TileSheet";
 import { TileCardFace } from "./ToolBar";
 import AbilityDock from "@/components/hud/AbilityDock";
 import BuildDrawer from "@/components/hud/BuildDrawer";
@@ -69,11 +70,11 @@ export default function GameView({
   const busy = useGame((s) => s.busy);
   const confirmRemove = useGame((s) => s.confirmRemove);
   const placeAt = useGame((s) => s.placeAt);
-  const redevelopAt = useGame((s) => s.redevelopAt);
   const bridgeOrientation = useGame((s) => s.bridgeOrientation);
   const setBridgeOrientation = useGame((s) => s.setBridgeOrientation);
   const requestRemoveAt = useGame((s) => s.requestRemoveAt);
   const exitTool = useGame((s) => s.exitTool);
+  const selectAt = useGame((s) => s.selectAt);
   const cancelRemove = useGame((s) => s.cancelRemove);
   const setTool = useGame((s) => s.setTool);
   const startPlanning = useGame((s) => s.startPlanning);
@@ -115,12 +116,14 @@ export default function GameView({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (useGame.getState().confirmRemove) cancelRemove();
+      const state = useGame.getState();
+      if (state.confirmRemove) cancelRemove();
+      else if (state.selected) selectAt(null);
       else exitTool();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [cancelRemove, exitTool]);
+  }, [cancelRemove, exitTool, selectAt]);
 
   const occupied = useMemo(() => occupiedSet(tiles), [tiles]);
   const placeType = tool.kind === "place" ? tool.type : null;
@@ -236,10 +239,16 @@ export default function GameView({
               cursor={busy ? "progress" : cursor}
               onCellHover={setHover}
               onCellClick={(cell) => {
+                // 建造模式直接落下；拆除模式点玩家建筑弹确认；
+                // 其余模式（选择 / 改造）一律打开二级详情卡，由卡内按钮决定动作
                 if (tool.kind === "place") void placeAt(cell);
                 else if (tool.kind === "remove") requestRemoveAt(cell);
-                else if (tool.kind === "redevelop") void redevelopAt(cell);
+                else {
+                  setPanelTab(null);
+                  selectAt(cell);
+                }
               }}
+              onEmptyClick={() => selectAt(null)}
               onRightClick={exitTool}
               debugHook={debug}
             />
@@ -323,6 +332,7 @@ export default function GameView({
 
           <ReportSummary />
           <Toasts />
+          <TileSheet />
 
           {phase === "briefing" && parcel && (
             <div className="pointer-events-auto absolute inset-0 z-30 grid place-items-center bg-black/35 p-4">
