@@ -165,7 +165,7 @@ export default function CityScene3D({
   );
 
   const camPos = useMemo<[number, number, number]>(
-    () => [extent * 0.92, extent * 1.2, extent * 1.4],
+    () => [extent * 0.7, extent * 0.92, extent * 1.02],
     [extent],
   );
   const shadowCam = extent * 0.62;

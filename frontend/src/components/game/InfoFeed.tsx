@@ -193,11 +193,11 @@ export default function InfoFeed() {
 
   return (
     <section
-      className="flex h-full min-h-0 flex-col rounded-lg border border-line bg-bg-elev/60"
+      className="flex h-full min-h-0 flex-col"
       data-testid="info-feed"
     >
-      <header className="flex items-center justify-between gap-2 border-b border-line px-3 py-2">
-        <h2 className="text-sm font-semibold">城市动态</h2>
+      <header className="flex items-center justify-between gap-2 border-b border-[var(--wb-gold-line)] px-3 py-2">
+        <h2 className="text-sm font-bold">城市动态</h2>
         <span
           className="flex items-center gap-1.5 text-[11px] text-fg-muted"
           data-testid="conn-state"
@@ -228,7 +228,7 @@ export default function InfoFeed() {
       )}
 
       <nav
-        className="flex gap-1 border-b border-line px-2 py-2"
+        className="flex flex-wrap gap-1 border-b border-[var(--wb-gold-line)] px-2 py-2"
         aria-label="信息流筛选"
       >
         {FILTERS.map((f) => (
@@ -237,11 +237,7 @@ export default function InfoFeed() {
             type="button"
             onClick={() => setFilter(f.key)}
             aria-pressed={filter === f.key}
-            className={`min-h-8 rounded-full px-2.5 text-xs ${
-              filter === f.key
-                ? "bg-accent text-bg"
-                : "text-fg-muted hover:bg-line"
-            }`}
+            className={`wb-tab ${filter === f.key ? "" : "hover:bg-white/5"}`}
           >
             {f.label}
           </button>
@@ -271,7 +267,7 @@ export default function InfoFeed() {
               setStick(true);
               setUnread(0);
             }}
-            className="absolute bottom-2 left-1/2 min-h-9 -translate-x-1/2 rounded-full bg-accent px-3 text-xs font-semibold text-bg shadow"
+            className="absolute bottom-2 left-1/2 min-h-9 -translate-x-1/2 rounded-full bg-[var(--wb-gold)] px-3 text-xs font-bold text-[#1c1610] shadow"
           >
             有 {unread} 条新消息 ↓
           </button>

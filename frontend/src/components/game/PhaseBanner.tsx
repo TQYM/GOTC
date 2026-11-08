@@ -1,10 +1,11 @@
 "use client";
 
 /**
- * 阶段横幅（05 §2.3 PhaseBanner / §3.4，PR-15）：不限时 4 态 + 城市年份徽章 + 三个主动入口。
+ * 右上时间控制区（WorldBox 重构，PR-15）：
+ * - 阶段徽章 + 城市年份（年份在 TopBar）+ 投影进度；
+ * - 圆形能力按钮：快进一年 / 推演 10 年 / 生成报告 / 请教导师 / 历史报告 / 返回建设；
  * - 只展示后端给的 phase 与 city_year，不推算、无任何倒计时；
- * - 「快进一年」「推演 10 年」「生成报告」只在 building 可用；后端暂不支持的能力置灰并说明原因；
- * - 当前 v1 后端的「推演」= finalize（会锁定本局），点击前二次确认。
+ * - 「推演」= finalize（会锁定本局），点击前二次确认（当前 v1 后端）。
  */
 import { useEffect, useState } from "react";
 import type { GamePhase } from "@/lib/api";
@@ -19,25 +20,25 @@ const PHASE_LABEL: Record<GamePhase, string> = {
 };
 
 const PHASE_TONE: Record<GamePhase, string> = {
-  briefing: "bg-slate-500/30 text-slate-100",
-  building: "bg-emerald-500/25 text-emerald-100",
-  projecting: "bg-sky-500/25 text-sky-100",
-  report: "bg-violet-500/25 text-violet-100",
+  briefing: "text-slate-200",
+  building: "text-emerald-200",
+  projecting: "text-sky-200",
+  report: "text-violet-200",
 };
 
 const NOT_YET = "当前后端未启用此能力；请使用 saves v2 完整后端";
 
-function ActionButton({
+function RoundAction({
   testId,
+  icon,
   label,
-  hint,
   disabled,
   why,
   onClick,
 }: {
   testId: string;
+  icon: string;
   label: string;
-  hint: string;
   disabled: boolean;
   why?: string;
   onClick: () => void;
@@ -46,12 +47,15 @@ function ActionButton({
     <button
       type="button"
       data-testid={testId}
+      aria-label={label}
+      title={disabled && why ? why : label}
       disabled={disabled}
-      title={disabled && why ? why : hint}
       onClick={onClick}
-      className="min-h-11 rounded-md border border-line bg-bg-elev/90 px-3 text-sm font-semibold hover:border-accent disabled:cursor-not-allowed disabled:opacity-45"
+      className="wb-round"
     >
-      {label}
+      <span className="text-xl leading-none" aria-hidden>
+        {icon}
+      </span>
     </button>
   );
 }
@@ -59,7 +63,6 @@ function ActionButton({
 export default function PhaseBanner() {
   const api = useGame((s) => s.api);
   const phase = useGame((s) => s.phase);
-  const cityYear = useGame((s) => s.cityYear);
   const busy = useGame((s) => s.busy);
   const projection = useGame((s) => s.projection);
   const projectionYear = useGame((s) => s.projectionYear);
@@ -101,158 +104,146 @@ export default function PhaseBanner() {
   }, [api?.kind, phase, projection, projectionYear]);
 
   return (
-    <div
-      className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-between gap-2 p-3"
-      data-testid="phase-banner"
-    >
-      <div className="pointer-events-auto flex items-center gap-2">
-        <span
-          className={`rounded-full px-3 py-1 text-sm font-semibold ${PHASE_TONE[phase]}`}
-          data-testid="phase-label"
-        >
-          {PHASE_LABEL[phase]}
-        </span>
-        <span
-          className="rounded-full bg-bg-elev/90 px-3 py-1 text-sm font-semibold tabular-nums"
-          data-testid="city-year"
-          data-year={cityYear}
-        >
-          第 {cityYear} 年
-        </span>
-        {phase === "projecting" && projection.length > 0 && (
+    <>
+      <div
+        className="pointer-events-none absolute right-3 top-3 z-20 flex max-w-[min(20rem,46vw)] flex-col items-end gap-2"
+        data-testid="phase-banner"
+      >
+        <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1.5">
           <span
-            className="flex items-center gap-2 rounded-full bg-bg-elev/90 px-3 py-1 text-xs"
-            data-testid="projection-progress"
+            data-testid="phase-label"
+            className={`wb-pill py-1 text-xs font-bold ${PHASE_TONE[phase]}`}
           >
-            推演至第 {Math.max(projectionYear, firstYear - 1)} / {lastYear} 年
-            <span className="inline-block h-1.5 w-20 overflow-hidden rounded bg-line">
-              <span
-                className="block h-full bg-sky-400 transition-all"
-                style={{ width: `${played * 100}%` }}
-              />
+            {PHASE_LABEL[phase]}
+          </span>
+          {phase === "projecting" && projection.length > 0 && (
+            <span
+              data-testid="projection-progress"
+              className="wb-pill py-1 text-[11px]"
+              title={`推演至第 ${Math.max(projectionYear, firstYear - 1)} / ${lastYear} 年`}
+            >
+              <span className="tabular-nums">
+                {Math.max(projectionYear, firstYear - 1)}/{lastYear} 年
+              </span>
+              <span className="inline-block h-1.5 w-16 overflow-hidden rounded-full bg-black/40">
+                <span
+                  className="block h-full rounded-full bg-sky-400 transition-[width]"
+                  style={{ width: `${played * 100}%` }}
+                />
+              </span>
             </span>
-          </span>
-        )}
-        {phase === "projecting" && projectionId && (
-          <span className="rounded-full bg-bg-elev/90 px-3 py-1 text-xs" data-testid="projection-identity">
-            基准 第 {projectionBaseYear} 年 / seq {projectionBaseSeq}
-          </span>
-        )}
-        {phase === "report" && cityReport?.baseYear !== undefined && (
-          <span className="rounded-full bg-bg-elev/90 px-3 py-1 text-xs" data-testid="report-identity">
-            基准 第 {cityReport.baseYear} 年 / seq {cityReport.baseSeq}
-          </span>
-        )}
-      </div>
-      <div className="pointer-events-auto flex flex-wrap items-center gap-2">
-        {building && (
-          <>
-            <ActionButton
-              testId="advance-year"
-              label="快进一年"
-              hint="城市过一年：收税、人口迁移、年度事件"
-              disabled={busy || !caps?.advanceYear}
+          )}
+          {phase === "projecting" && projectionId && (
+            <span className="wb-pill py-1 text-[10px]" data-testid="projection-identity">
+              base 第 {projectionBaseYear} 年 · seq {projectionBaseSeq}
+            </span>
+          )}
+          {phase === "report" && cityReport?.baseYear !== undefined && (
+            <span className="wb-pill py-1 text-[10px]" data-testid="report-identity">
+              base 第 {cityReport.baseYear} 年 · seq {cityReport.baseSeq}
+            </span>
+          )}
+        </div>
+
+        <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-2">
+          {building && (
+            <>
+              <RoundAction
+                testId="advance-year"
+                icon="⏭️"
+                label="快进一年：收税、人口迁移、年度事件"
+                disabled={busy || !caps?.advanceYear}
+                why={NOT_YET}
+                onClick={() => void advanceYear()}
+              />
+              <RoundAction
+                testId="project"
+                icon="🔮"
+                label={caps?.projectLocksCity ? "推演 10 年（会锁定本局）" : "只读预览未来 10 年"}
+                disabled={busy || !caps?.project}
+                why={NOT_YET}
+                onClick={() => (caps?.projectLocksCity ? setConfirmLock(true) : void project())}
+              />
+              <RoundAction
+                testId="report"
+                icon="📋"
+                label="生成报告：五维评分 + 规划导师诊断"
+                disabled={busy || !caps?.report}
+                why={caps?.projectLocksCity ? "当前后端版本的报告随「推演 10 年」一起生成" : NOT_YET}
+                onClick={() => void makeReport()}
+              />
+              <RoundAction
+                testId="mentor"
+                icon="🎓"
+                label="请教导师（异步，不阻塞经营）"
+                disabled={busy || !caps?.mentor}
+                why={NOT_YET}
+                onClick={() => void askMentor()}
+              />
+            </>
+          )}
+          {phase !== "briefing" && (
+            <RoundAction
+              testId="report-history-toggle"
+              icon="🗂️"
+              label="历史城市报告（最近 20 份）"
+              disabled={!caps?.reportHistory}
               why={NOT_YET}
-              onClick={() => void advanceYear()}
+              onClick={() => {
+                setHistoryOpen((value) => !value);
+                if (!historyOpen) void loadReports();
+              }}
             />
-            <ActionButton
-              testId="project"
-              label="推演 10 年"
-              hint={
-                caps?.projectLocksCity
-                  ? "预览未来 10 年（当前后端：推演后本局锁定）"
-                  : "只读预览未来 10 年，不影响当前城市"
-              }
-              disabled={busy || !caps?.project}
-              why={NOT_YET}
-              onClick={() =>
-                caps?.projectLocksCity ? setConfirmLock(true) : void project()
-              }
-            />
-            <ActionButton
-              testId="report"
-              label="生成报告"
-              hint="城市体检：五维评分 + 规划导师诊断"
-              disabled={busy || !caps?.report}
-              why={
-                caps?.projectLocksCity
-                  ? "当前后端版本的报告随「推演 10 年」一起生成"
-                  : NOT_YET
-              }
-              onClick={() => void makeReport()}
-            />
-            <ActionButton
-              testId="mentor"
-              label="请教导师"
-              hint="异步获取规划建议，不阻塞经营"
-              disabled={busy || !caps?.mentor}
-              why={NOT_YET}
-              onClick={() => void askMentor()}
-            />
-          </>
-        )}
-        {phase !== "briefing" && (
-          <ActionButton
-            testId="report-history-toggle"
-            label="历史报告"
-            hint="查看最近 20 份城市诊断"
-            disabled={!caps?.reportHistory}
-            why={NOT_YET}
-            onClick={() => {
-              setHistoryOpen((value) => !value);
-              if (!historyOpen) void loadReports();
-            }}
-          />
-        )}
-        {(phase === "projecting" || phase === "report") &&
-          caps &&
-          !caps.projectLocksCity && (
-            <ActionButton
+          )}
+          {(phase === "projecting" || phase === "report") && caps && !caps.projectLocksCity && (
+            <RoundAction
               testId="back-to-building"
-              label="返回建设"
-              hint="回到自由建设，继续经营"
+              icon="↩️"
+              label="回到自由建设"
               disabled={busy}
               onClick={() => void backToBuilding()}
             />
           )}
+        </div>
       </div>
 
       {historyOpen && <ReportHistory onClose={() => setHistoryOpen(false)} />}
 
       {confirmLock && (
         <div
-          className="pointer-events-auto absolute inset-x-0 top-16 mx-auto w-96 rounded-xl border border-amber-400/60 bg-bg-elev p-4 shadow-2xl"
+          className="pointer-events-auto fixed inset-0 z-40 grid place-items-center bg-black/45 p-4"
           role="dialog"
           aria-modal="true"
           data-testid="confirm-lock"
         >
-          <p className="text-sm font-semibold">推演后本局将锁定</p>
-          <p className="mt-1 text-xs text-fg-muted">
-            当前后端版本还没有「只读推演」，推演 10
-            年会直接出报告并结束建设。确定现在推演吗？
-          </p>
-          <div className="mt-3 flex justify-end gap-2">
-            <button
-              type="button"
-              className="min-h-10 rounded-md border border-line px-3 text-sm"
-              onClick={() => setConfirmLock(false)}
-            >
-              再建一会
-            </button>
-            <button
-              type="button"
-              data-testid="confirm-lock-ok"
-              className="min-h-10 rounded-md bg-amber-500 px-3 text-sm font-semibold text-black"
-              onClick={() => {
-                setConfirmLock(false);
-                void project();
-              }}
-            >
-              推演并出报告
-            </button>
+          <div className="wb-panel w-full max-w-sm rounded-2xl p-4">
+            <p className="text-sm font-bold">推演后本局将锁定</p>
+            <p className="mt-1 text-xs text-[var(--wb-ink-muted)]">
+              当前后端版本还没有「只读推演」，推演 10 年会直接出报告并结束建设。确定现在推演吗？
+            </p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                className="min-h-10 rounded-full border border-[var(--wb-gold-line)] px-4 text-sm"
+                onClick={() => setConfirmLock(false)}
+              >
+                再建一会
+              </button>
+              <button
+                type="button"
+                data-testid="confirm-lock-ok"
+                className="min-h-10 rounded-full bg-[var(--wb-gold)] px-4 text-sm font-bold text-[#1c1610] active:scale-95"
+                onClick={() => {
+                  setConfirmLock(false);
+                  void project();
+                }}
+              >
+                推演并出报告
+              </button>
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

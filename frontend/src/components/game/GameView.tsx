@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 /**
- * 游戏页主体（05 §2.2）：左指标 · 中 3D 沙盘（底部工具栏）· 右 AI 信息流。
- * 放置交互（05 §3.1 / 13 §4.3）：选中卡牌进入放置模式 → 幽灵预览（合法绿 / 非法红）→ 左键落子，
- * 保持放置模式可连续放置；右键单击 / ESC 逐级退出。卡牌也可直接拖到沙盘上落子。
+ * 游戏页（WorldBox 风格 HUD 重构，PR-37）：
+ * 全屏 3D 沙盘为底，所有 UI 悬浮：
+ *   左上世界徽章（城市名/年份/城市码）· 顶部中央资源胶囊 · 右上时间控制 ·
+ *   左下圆形能力坞 · 底部建造抽屉 · 右侧城市/动态面板 · 左下事件条。
+ * 玩法逻辑（放置/拆除/改造/快进/推演/报告/拖拽）全部沿用 store，与 05/13/14 规格一致。
  */
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -24,20 +26,22 @@ import { SCENE_COLORS } from "@/lib/palette";
 import { checkPlacement } from "@/lib/validate";
 import { occupiedSet, tileAt, useGame } from "@/store/game";
 import { rememberRecent } from "@saves/lib/recent";
-import InfoFeed from "./InfoFeed";
-import MetricsPanel from "./MetricsPanel";
+import { ResourcePills } from "./MetricsPanel";
 import PhaseBanner from "./PhaseBanner";
 import ReportSummary from "./ReportSummary";
 import RemoveConfirm from "./RemoveConfirm";
 import Toasts from "./Toasts";
-import ToolBar, { TileCardFace } from "./ToolBar";
+import { TileCardFace } from "./ToolBar";
+import AbilityDock from "@/components/hud/AbilityDock";
+import BuildDrawer from "@/components/hud/BuildDrawer";
+import InspectorPanel from "@/components/hud/InspectorPanel";
+import NewsTicker from "@/components/hud/NewsTicker";
+import TopBar from "@/components/hud/TopBar";
 
 const CityScene3D = dynamic(() => import("@/components/scene/CityScene3D"), {
   ssr: false,
   loading: () => (
-    <div className="grid h-full place-items-center text-fg-muted">
-      加载 3D 场景…
-    </div>
+    <div className="grid h-full place-items-center text-fg-muted">加载 3D 场景…</div>
   ),
 });
 
@@ -76,6 +80,8 @@ export default function GameView({
 
   const [hover, setHover] = useState<Cell | null>(null);
   const [dragType, setDragType] = useState<TileType | null>(null);
+  const [buildOpen, setBuildOpen] = useState(false);
+  const [panelTab, setPanelTab] = useState<"city" | "feed" | null>(null);
   const sceneBox = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -148,8 +154,7 @@ export default function GameView({
     [check, placeType, hover, bridgeOrientation],
   );
 
-  const removeTarget =
-    tool.kind === "remove" && hover ? tileAt(tiles, hover) : undefined;
+  const removeTarget = tool.kind === "remove" && hover ? tileAt(tiles, hover) : undefined;
   const overlay = useMemo(() => {
     const t = confirmRemove?.tile ?? removeTarget;
     return t ? { cells: t.cells, color: SCENE_COLORS.invalid } : null;
@@ -160,8 +165,7 @@ export default function GameView({
   );
 
   const onDragStart = (e: DragStartEvent) => {
-    const type = (e.active.data.current as { type?: TileType } | undefined)
-      ?.type;
+    const type = (e.active.data.current as { type?: TileType } | undefined)?.type;
     if (!type) return;
     setDragType(type);
     setTool({ kind: "place", type });
@@ -174,10 +178,12 @@ export default function GameView({
     if (!act || !box) return;
     const x = act.clientX + e.delta.x;
     const y = act.clientY + e.delta.y;
-    const onBoard =
-      x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
+    const onBoard = x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
     if (onBoard && hover) void placeAt(hover);
   };
+
+  const togglePanel = (tab: "city" | "feed") =>
+    setPanelTab((cur) => (cur === tab ? null : tab));
 
   if (status === "error") {
     return (
@@ -186,7 +192,7 @@ export default function GameView({
           <p className="text-lg font-semibold">{loadError}</p>
           <Link
             href="/"
-            className="mt-3 inline-block rounded-md bg-accent px-4 py-2 font-medium text-bg"
+            className="mt-3 inline-block rounded-full bg-[var(--wb-gold)] px-5 py-2 font-bold text-[#1c1610]"
           >
             回首页
           </Link>
@@ -212,119 +218,139 @@ export default function GameView({
       onDragCancel={() => setDragType(null)}
     >
       <main
-        className="relative flex h-screen flex-col gap-2 p-2 lg:flex-row"
+        className="relative h-dvh w-full overflow-hidden bg-[#cfe6f2]"
         data-testid="game-view"
         data-phase={phase}
       >
-        <aside className="order-2 w-full shrink-0 overflow-y-auto lg:order-1 lg:w-56">
-          <MetricsPanel />
-        </aside>
+        {/* 3D 沙盘：全屏铺底 */}
+        <div ref={sceneBox} className="absolute inset-0">
+          {parcel ? (
+            <CityScene3D
+              parcel={parcel}
+              tiles={tiles}
+              redevelopedAssetIds={redevelopedAssetIds}
+              buildingsUrl={parcel.buildings_url}
+              networkUrl={parcel.network_url}
+              ghost={ghost}
+              overlay={overlay}
+              cursor={busy ? "progress" : cursor}
+              onCellHover={setHover}
+              onCellClick={(cell) => {
+                if (tool.kind === "place") void placeAt(cell);
+                else if (tool.kind === "remove") requestRemoveAt(cell);
+                else if (tool.kind === "redevelop") void redevelopAt(cell);
+              }}
+              onRightClick={exitTool}
+              debugHook={debug}
+            />
+          ) : (
+            <div className="grid h-full place-items-center text-fg-muted">加载城市…</div>
+          )}
+        </div>
 
-        <section className="relative order-1 flex min-h-[70vh] flex-1 flex-col overflow-hidden rounded-lg border border-line lg:order-2 lg:min-h-0">
-          <div ref={sceneBox} className="relative min-h-0 flex-1">
-            {parcel ? (
-              <CityScene3D
-                parcel={parcel}
-                tiles={tiles}
-                redevelopedAssetIds={redevelopedAssetIds}
-                buildingsUrl={parcel.buildings_url}
-                networkUrl={parcel.network_url}
-                ghost={ghost}
-                overlay={overlay}
-                cursor={busy ? "progress" : cursor}
-                onCellHover={setHover}
-                onCellClick={(cell) => {
-                  if (tool.kind === "place") void placeAt(cell);
-                  else if (tool.kind === "remove") requestRemoveAt(cell);
-                  else if (tool.kind === "redevelop") void redevelopAt(cell);
-                }}
-                onRightClick={exitTool}
-                debugHook={debug}
+        {/* HUD 层：不拦截场景操作，只有具体控件接收事件 */}
+        <div className="pointer-events-none absolute inset-0 z-10">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/25 to-transparent" />
+
+          <div className="absolute left-3 top-3">
+            <TopBar />
+          </div>
+          <div className="absolute left-1/2 top-3 hidden -translate-x-1/2 sm:block">
+            <ResourcePills />
+          </div>
+
+          <PhaseBanner />
+
+          <div className="absolute bottom-3 left-3">
+            <AbilityDock
+              buildOpen={buildOpen}
+              onOpenBuild={() => setBuildOpen((v) => !v)}
+              onOpenPanel={togglePanel}
+              panelTab={panelTab}
+            />
+          </div>
+
+          <div className="absolute bottom-28 left-3">
+            <NewsTicker onOpenFeed={() => setPanelTab("feed")} />
+          </div>
+
+          {panelTab && (
+            <div className="absolute bottom-3 right-3 top-[6.5rem] z-20 w-[min(22rem,88vw)]">
+              <InspectorPanel
+                tab={panelTab}
+                onTab={setPanelTab}
+                onClose={() => setPanelTab(null)}
               />
-            ) : (
-              <div className="grid h-full place-items-center text-fg-muted">
-                加载城市…
-              </div>
-            )}
+            </div>
+          )}
 
-            {placeType === "util_bridge" && (
-              <div className="absolute bottom-3 right-3 z-10 flex rounded-md border border-line bg-bg-elev/95 p-1 text-xs" role="group" aria-label="桥梁方向">
-                {(["horizontal", "vertical"] as const).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    data-testid={`bridge-${value}`}
-                    aria-pressed={bridgeOrientation === value}
-                    onClick={() => setBridgeOrientation(value)}
-                    className={`min-h-9 rounded px-3 ${bridgeOrientation === value ? "bg-accent text-bg" : ""}`}
-                  >
-                    {value === "horizontal" ? "东西向" : "南北向"}
-                  </button>
-                ))}
-              </div>
-            )}
+          <BuildDrawer open={buildOpen} onClose={() => setBuildOpen(false)} />
 
-            {tool.kind === "place" && check && !check.ok && (
-              <div
-                className="pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 rounded-md bg-red-600/90 px-3 py-1 text-sm text-white"
-                data-testid="invalid-reason"
-              >
-                {check.reason}
-              </div>
-            )}
-            {tool.kind === "place" && check?.ok && check.warning && (
-              <div className="pointer-events-none absolute left-1/2 top-16 -translate-x-1/2 rounded-md bg-amber-500/90 px-3 py-1 text-sm text-black">
-                {check.warning}
-              </div>
-            )}
-            {tool.kind !== "select" && (
-              <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-black/50 px-2 py-1 text-xs text-white">
-                {tool.kind === "remove" ? "拆除模式" : tool.kind === "redevelop" ? "更新改造模式" : "放置模式"} · 右键 / ESC
-                退出
-              </div>
-            )}
-
-            {parcel && <PhaseBanner />}
-            <ReportSummary />
-
-            {phase === "briefing" && parcel && (
-              <div className="absolute inset-0 z-20 grid place-items-center bg-black/30 p-4">
-                <div
-                  className="max-w-md rounded-xl border border-line bg-bg-elev p-5 shadow-2xl"
-                  data-testid="briefing"
+          {placeType === "util_bridge" && (
+            <div
+              className="pointer-events-auto absolute bottom-3 right-3 z-20 flex rounded-full border border-[var(--wb-gold-line)] bg-[var(--wb-panel-strong)] p-1 text-xs"
+              role="group"
+              aria-label="桥梁方向"
+            >
+              {(["horizontal", "vertical"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  data-testid={`bridge-${value}`}
+                  aria-pressed={bridgeOrientation === value}
+                  onClick={() => setBridgeOrientation(value)}
+                  className="min-h-9 rounded-full px-3 aria-pressed:bg-[var(--wb-gold)] aria-pressed:font-bold aria-pressed:text-[#1c1610]"
                 >
-                  <h2 className="text-lg font-semibold">规划简报</h2>
-                  <p className="mt-2 text-sm text-fg-muted">
-                    {parcel.constraints.briefing.text}
-                  </p>
-                  <button
-                    type="button"
-                    data-testid="start-planning"
-                    disabled={busy}
-                    onClick={() => void startPlanning()}
-                    className="mt-4 min-h-12 rounded-md bg-accent px-5 font-semibold text-bg disabled:opacity-60"
-                  >
-                    开始规划
-                  </button>
-                </div>
+                  {value === "horizontal" ? "东西向" : "南北向"}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {tool.kind === "place" && check && !check.ok && (
+            <div
+              className="pointer-events-none absolute left-1/2 top-20 z-20 -translate-x-1/2 rounded-full bg-red-600/95 px-4 py-1.5 text-sm font-semibold text-white shadow-lg"
+              data-testid="invalid-reason"
+            >
+              {check.reason}
+            </div>
+          )}
+          {tool.kind === "place" && check?.ok && check.warning && (
+            <div className="pointer-events-none absolute left-1/2 top-20 z-20 -translate-x-1/2 rounded-full bg-amber-400/95 px-4 py-1.5 text-sm font-semibold text-black shadow-lg">
+              {check.warning}
+            </div>
+          )}
+
+          <ReportSummary />
+          <Toasts />
+
+          {phase === "briefing" && parcel && (
+            <div className="pointer-events-auto absolute inset-0 z-30 grid place-items-center bg-black/35 p-4">
+              <div className="wb-panel wb-anim-rise max-w-md rounded-2xl p-5" data-testid="briefing">
+                <h2 className="text-lg font-bold">规划简报</h2>
+                <p className="mt-2 text-sm text-[var(--wb-ink-muted)]">
+                  {parcel.constraints.briefing.text}
+                </p>
+                <button
+                  type="button"
+                  data-testid="start-planning"
+                  disabled={busy}
+                  onClick={() => void startPlanning()}
+                  className="mt-4 min-h-12 rounded-full bg-[var(--wb-gold)] px-6 font-bold text-[#1c1610] disabled:opacity-60 active:scale-[0.98]"
+                >
+                  开始规划
+                </button>
               </div>
-            )}
+            </div>
+          )}
+        </div>
 
-            <Toasts />
-          </div>
-          <div className="border-t border-line bg-bg/80">
-            <ToolBar />
-          </div>
-          <RemoveConfirm />
-        </section>
-
-        <aside className="order-3 h-[50vh] w-full shrink-0 lg:h-auto lg:w-80">
-          <InfoFeed />
-        </aside>
+        <RemoveConfirm />
       </main>
+
       <DragOverlay dropAnimation={null} style={{ pointerEvents: "none" }}>
         {dragType ? (
-          <div className="rounded-lg border border-accent bg-bg-elev/90 px-3 py-2 shadow-xl">
+          <div className="rounded-xl border border-[var(--wb-gold)] bg-[var(--wb-panel-strong)] px-3 py-2 shadow-xl">
             <TileCardFace type={dragType} compact />
           </div>
         ) : null}

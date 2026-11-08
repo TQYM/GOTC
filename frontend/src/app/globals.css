@@ -94,3 +94,202 @@ body {
     animation: none;
   }
 }
+
+/* ——— WorldBox 风格 HUD 设计令牌（PR-37 UI 重构）———
+   全屏沙盘 + 悬浮深棕金边面板：圆角、金色细边、羊皮纸文字、短促 ease-out 动效 */
+:root {
+  --wb-panel: rgba(28, 22, 17, 0.86);
+  --wb-panel-strong: rgba(36, 28, 21, 0.94);
+  --wb-gold: #d9b26a;
+  --wb-gold-strong: #f2cf8b;
+  --wb-gold-line: rgba(217, 178, 106, 0.26);
+  --wb-gold-fill: rgba(217, 178, 106, 0.12);
+  --wb-ink: #f4e9d4;
+  --wb-ink-muted: #bfae8d;
+  --wb-shadow: 0 12px 32px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --wb-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --wb-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.wb-panel {
+  background: var(--wb-panel);
+  border: 1px solid var(--wb-gold-line);
+  box-shadow: var(--wb-shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--wb-ink);
+}
+
+.wb-panel-strong {
+  background: var(--wb-panel-strong);
+}
+
+/* 圆形能力按钮（左下 dock / 右上时间控制）：按压缩放反馈 */
+.wb-round {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 9999px;
+  border: 1px solid var(--wb-gold-line);
+  background: var(--wb-panel-strong);
+  color: var(--wb-ink);
+  box-shadow: var(--wb-shadow);
+  transition: transform 140ms var(--wb-ease-out), border-color 140ms var(--wb-ease-out),
+    box-shadow 140ms var(--wb-ease-out), background-color 140ms var(--wb-ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .wb-round:hover {
+    border-color: var(--wb-gold);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--wb-gold-line);
+  }
+}
+.wb-round:active {
+  transform: scale(0.95);
+}
+.wb-round[aria-pressed="true"] {
+  border-color: var(--wb-gold-strong);
+  background: linear-gradient(180deg, rgba(217, 178, 106, 0.24), rgba(217, 178, 106, 0.1));
+  color: var(--wb-gold-strong);
+}
+.wb-round:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 资源胶囊 */
+.wb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.4rem;
+  padding: 0 0.8rem;
+  border-radius: 9999px;
+  border: 1px solid var(--wb-gold-line);
+  background: var(--wb-panel);
+  box-shadow: var(--wb-shadow);
+  color: var(--wb-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: border-color 140ms var(--wb-ease-out), transform 140ms var(--wb-ease-out);
+}
+.wb-pill:hover {
+  border-color: var(--wb-gold);
+}
+.wb-pill:active {
+  transform: scale(0.98);
+}
+
+/* 卡牌 / 分类 tab */
+.wb-card {
+  border: 1px solid var(--wb-gold-line);
+  background: rgba(44, 35, 26, 0.66);
+  border-radius: 0.8rem;
+  transition: transform 140ms var(--wb-ease-out), border-color 140ms var(--wb-ease-out),
+    background-color 140ms var(--wb-ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .wb-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--wb-gold);
+    background: rgba(58, 46, 33, 0.8);
+  }
+}
+.wb-card:active {
+  transform: scale(0.97);
+}
+.wb-card[aria-pressed="true"] {
+  border-color: var(--wb-gold-strong);
+  background: linear-gradient(180deg, rgba(217, 178, 106, 0.26), rgba(217, 178, 106, 0.1));
+}
+.wb-card:disabled {
+  opacity: 0.45;
+}
+
+.wb-tab {
+  min-height: 2rem;
+  padding: 0 0.7rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  color: var(--wb-ink-muted);
+  font-size: 0.75rem;
+  transition: color 140ms var(--wb-ease-out), background-color 140ms var(--wb-ease-out),
+    border-color 140ms var(--wb-ease-out);
+}
+.wb-tab[aria-pressed="true"] {
+  color: #1c1610;
+  background: var(--wb-gold);
+  border-color: var(--wb-gold-strong);
+}
+.wb-tab:active {
+  transform: scale(0.97);
+}
+
+/* 入场动效：短促、ease-out、从下往上 8–10px；绝不用 scale(0) */
+@keyframes wb-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes wb-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes wb-slide-right {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes wb-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.wb-anim-rise {
+  animation: wb-rise 220ms var(--wb-ease-out) both;
+}
+.wb-anim-slide-up {
+  animation: wb-slide-up 240ms var(--wb-ease-drawer) both;
+}
+.wb-anim-slide-right {
+  animation: wb-slide-right 200ms var(--wb-ease-out) both;
+}
+.wb-anim-fade {
+  animation: wb-fade 180ms var(--wb-ease-out) both;
+}
+
+/* 描边省略：性能优先，卡牌用金色细边代替像素描边 */
+
+@media (prefers-reduced-motion: reduce) {
+  .wb-anim-rise,
+  .wb-anim-slide-up,
+  .wb-anim-slide-right,
+  .wb-anim-fade {
+    animation: none;
+  }
+  .wb-round,
+  .wb-card,
+  .wb-pill,
+  .wb-tab {
+    transition: none;
+  }
+}
