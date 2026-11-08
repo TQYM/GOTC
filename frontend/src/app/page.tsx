@@ -1,5 +1,6 @@
 import Link from "next/link";
 import CreateCity from "./CreateCity";
+import { NativeEntry } from "@/components/native/NativeEntry";
 import { PixelIcon, TileThumb } from "@/components/ui/PixelSprite";
 import type { TileType } from "@/lib/contract";
 import type { IconName } from "@/lib/pixelArt";
@@ -35,6 +36,7 @@ function Cloud({ className }: { className: string }) {
 export default function Home() {
   return (
     <main className="relative flex w-full flex-1 flex-col overflow-hidden bg-[var(--px-sky)]">
+      <NativeEntry />
       <Cloud className="left-[6%] top-[8%]" />
       <Cloud className="right-[10%] top-[14%] scale-75" />
       <Cloud className="left-[42%] top-[4%] scale-50" />

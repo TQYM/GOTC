@@ -9,6 +9,7 @@ import Link from "next/link";
  * 玩法逻辑（放置/拆除/改造/快进/推演/报告/拖拽）全部沿用 store，与 05/13/14 规格一致。
  */
 import dynamic from "next/dynamic";
+import { isNativeApp } from "@/lib/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
@@ -98,6 +99,13 @@ export default function GameView({
   const cancelRemove = useGame((s) => s.cancelRemove);
   const setTool = useGame((s) => s.setTool);
   const startPlanning = useGame((s) => s.startPlanning);
+  // 手机端：跳过规划简报，进入即开始建造（m03777）
+  useEffect(() => {
+    if (!isNativeApp() || phase !== "briefing") return;
+    if (!parcel) return;
+    void startPlanning();
+  }, [phase, parcel, startPlanning]);
+
   const toast = useGame((s) => s.toast);
 
   const selected = useGame((s) => s.selected);
