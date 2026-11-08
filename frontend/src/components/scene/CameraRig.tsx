@@ -46,6 +46,8 @@ export interface CameraRigProps {
   boundsCenter?: [number, number];
   /** 最大俯仰角（弧度）：越小越限制平视，避免露出地图边缘外的虚空 */
   maxPolarAngle?: number;
+  /** 视野中心变化（世界坐标 x/z），HUD 用来显示"当前在哪个区" */
+  onTargetChange?: (x: number, z: number) => void;
   /** 飞行请求：token 变化时在 duration ms 内平滑飞到目标机位（0 = 瞬移） */
   fly?: {
     pos: [number, number, number];
@@ -66,11 +68,13 @@ export default function CameraRig({
   bounds,
   boundsCenter,
   maxPolarAngle = 1.32,
+  onTargetChange,
   fly = null,
 }: CameraRigProps) {
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
   const camera = useThree((s) => s.camera);
   const pressed = useRef(new Set<string>());
+  const lastReport = useRef<[number, number] | null>(null);
 
   const resetView = useCallback(() => {
     const c = controls.current;
@@ -174,6 +178,17 @@ export default function CameraRig({
       camera.position.z += dz;
       c.update();
     }
+    if (onTargetChange) {
+      const last = lastReport.current;
+      if (
+        !last ||
+        Math.abs(last[0] - c.target.x) > 120 ||
+        Math.abs(last[1] - c.target.z) > 120
+      ) {
+        lastReport.current = [c.target.x, c.target.z];
+        onTargetChange(c.target.x, c.target.z);
+      }
+    }
   });
   /* eslint-enable react-hooks/immutability */
 
@@ -237,7 +252,11 @@ export default function CameraRig({
       minPolarAngle={0.15}
       maxPolarAngle={maxPolarAngle}
       screenSpacePanning={false}
-      mouseButtons={{ MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE }}
+      mouseButtons={{
+        LEFT: THREE.MOUSE.PAN,
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: THREE.MOUSE.ROTATE,
+      }}
       touches={{ ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE }}
     />
   );

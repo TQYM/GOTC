@@ -6,10 +6,12 @@
  */
 import { useGame } from "@/store/game";
 
-export default function TopBar() {
+export default function TopBar({ title }: { title?: string | null } = {}) {
   const cityName = useGame((s) => s.cityName);
   const cityYear = useGame((s) => s.cityYear);
   const id = useGame((s) => s.id);
+  // 左上角标题是"当前在看什么"：选中的建筑 → 视野所在的区 → 城市名
+  const heading = title?.trim() || cityName || "CITY20 城市";
   const initial = (cityName ?? "城").trim().slice(0, 1);
 
   return (
@@ -27,7 +29,7 @@ export default function TopBar() {
         </div>
         <div className="min-w-0">
           <div className="max-w-[13rem] truncate text-[19px] leading-tight">
-            {cityName ?? "CITY20 城市"}
+            {heading}
           </div>
           <div className="mt-1 flex items-center gap-2 text-[12px] leading-none">
             <span data-testid="city-year" data-year={cityYear} className="tabular-nums">

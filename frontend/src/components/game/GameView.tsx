@@ -9,7 +9,7 @@ import Link from "next/link";
  * 玩法逻辑（放置/拆除/改造/快进/推演/报告/拖拽）全部沿用 store，与 05/13/14 规格一致。
  */
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -123,6 +123,7 @@ export default function GameView({
     };
   }, [selected, tiles, existingAssets]);
 
+
   const [hover, setHover] = useState<Cell | null>(null);
   const [dragType, setDragType] = useState<TileType | null>(null);
   const [buildOpen, setBuildOpen] = useState(false);
@@ -131,6 +132,55 @@ export default function GameView({
   // PR-36：北京全域地图作为背景，可玩沙盘嵌在 CBD 片区（v1 沙盘规格 48×48 @50m）
   // 东西朝海棋盘本身已覆盖 48km 全域，不再叠加全域地图层（会与 400m 棋盘地形重叠）
   const withWorldMap = !parcel || parcel.parcel_id !== "beijing_core";
+  const parcelLabelsUrl =
+    !withWorldMap && parcel
+      ? `/static/parcels/${parcel.parcel_id}/labels.json`
+      : null;
+
+  // 左上角标题：选中建筑 > 视野所在的区 > 城市名
+  const [districtAnchors, setDistrictAnchors] = useState<
+    { name: string; x: number; y: number }[] | null
+  >(null);
+  const [regionName, setRegionName] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!parcelLabelsUrl) return;
+    let alive = true;
+    fetch(parcelLabelsUrl)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: { labels?: { name?: string; kind?: string; x: number; y: number }[] } | null) => {
+        if (!alive) return;
+        const anchors = (json?.labels ?? [])
+          .filter((l) => l.kind === "city" && l.name && l.name.endsWith("区"))
+          .map((l) => ({ name: l.name as string, x: l.x, y: l.y }));
+        setDistrictAnchors(anchors);
+      })
+      .catch(() => alive && setDistrictAnchors([]));
+    return () => {
+      alive = false;
+    };
+  }, [parcelLabelsUrl]);
+
+  const onViewTarget = useCallback(
+    (x: number, z: number) => {
+      if (!districtAnchors?.length || !parcel) return;
+      const half = (parcel.size * parcel.cell_size_m) / 2;
+      // 世界坐标 → 数据包局部米制（x 东、y 北）
+      const mx = x + half;
+      const my = half - z;
+      let best: string | null = null;
+      let bestD = Infinity;
+      for (const a of districtAnchors) {
+        const d = (a.x - mx) ** 2 + (a.y - my) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          best = a.name;
+        }
+      }
+      setRegionName((prev) => (prev === best ? prev : best));
+    },
+    [districtAnchors, parcel],
+  );
   const { state: mapState, retry: retryMap } = useFullMap(
     parcel
       ? {
@@ -312,6 +362,7 @@ export default function GameView({
               onEmptyClick={() => selectAt(null)}
               ambience={ambience}
               selectedLabel={selectedLabel}
+              onViewTarget={onViewTarget}
               onOutsideCore={() => {
                 setPanelTab(null);
                 selectAt(null);
@@ -323,11 +374,7 @@ export default function GameView({
               }}
               onRightClick={exitTool}
               map={withWorldMap && mapState.status === "ready" ? mapState.data : null}
-              parcelLabelsUrl={
-                !withWorldMap && parcel
-                  ? `/static/parcels/${parcel.parcel_id}/labels.json`
-                  : null
-              }
+              parcelLabelsUrl={parcelLabelsUrl}
               initialPreset="cbd"
               labelTopInset={64}
               mapPickEnabled={tool.kind === "select"}
@@ -343,7 +390,7 @@ export default function GameView({
         <div className="pointer-events-none absolute inset-0 z-10">
 
           <div className="absolute left-4 top-4">
-            <TopBar />
+            <TopBar title={selectedLabel?.name ?? regionName ?? null} />
           </div>
           <div className="absolute left-1/2 top-4 hidden -translate-x-1/2 lg:block">
             <ResourcePills />

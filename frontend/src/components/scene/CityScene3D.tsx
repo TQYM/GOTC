@@ -100,6 +100,8 @@ export interface CityScene3DProps {
   onOutsideCore?: () => void;
   /** 选中的建筑名称牌（详情卡打开时钉在建筑顶上；地标已有固定标签，这里只管普通建筑） */
   selectedLabel?: { r: number; c: number; name: string; height?: number } | null;
+  /** 视野中心（世界坐标）变化：HUD 用它在左上角显示"当前在哪个区" */
+  onViewTarget?: (x: number, z: number) => void;
   /** 街景层：像素小人与车流的规模参数（人口 / 岗位 / 拥堵 / 幸福度） */
   ambience?: {
     population: number;
@@ -334,6 +336,7 @@ export default function CityScene3D({
   parcelLabelsUrl = null,
   onOutsideCore,
   selectedLabel = null,
+  onViewTarget,
   ambience = null,
   debugHook = false,
   pixelScale,
@@ -399,8 +402,14 @@ export default function CityScene3D({
     },
     [onCellHover],
   );
+  // 左键现在是"拖拽平移"（地图操作逻辑）：拖过一段距离就不要再算成一次点选
+  const dragState = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const suppressPickUntil = useRef(0);
   const handlePick = useCallback(
-    (cell: Cell) => onCellClick?.(cell),
+    (cell: Cell) => {
+      if (performance.now() < suppressPickUntil.current) return;
+      onCellClick?.(cell);
+    },
     [onCellClick],
   );
 
@@ -464,8 +473,16 @@ export default function CityScene3D({
       style={cursor ? { cursor } : undefined}
       onPointerDown={(e) => {
         if (e.button === 2) rightDown.current = [e.clientX, e.clientY];
+        if (e.button === 0) dragState.current = { x: e.clientX, y: e.clientY, moved: false };
+      }}
+      onPointerMove={(e) => {
+        const d = dragState.current;
+        if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) d.moved = true;
       }}
       onPointerUp={(e) => {
+        const drag = dragState.current;
+        dragState.current = null;
+        if (e.button === 0 && drag?.moved) suppressPickUntil.current = performance.now() + 220;
         const d = rightDown.current;
         rightDown.current = null;
         // 右键拖拽是旋转视角；只有几乎不动的右键单击才算「退出工具」
@@ -494,11 +511,7 @@ export default function CityScene3D({
         }}
       >
         <color attach="background" args={[bg]} />
-        {world ? (
-          <fog attach="fog" args={[bg, 160000, 450000]} />
-        ) : (
-          <fog attach="fog" args={[bg, boardExtent * 0.46, boardExtent * 1.15]} />
-        )}
+
         <CameraEnvelope
           near={world ? 5 : 5}
           far={world ? 600000 : boardExtent * 8}
@@ -572,7 +585,7 @@ export default function CityScene3D({
           />
         )}
 
-        {/* 棋盘之外的大地：一圈低饱和草原色垫底，配合雾把边界糊掉，避免"浮岛+虚空" */}
+        {/* 棋盘之外的大地：一圈低饱和草原色垫底，避免"浮岛+虚空"（不依赖雾） */}
         {!world && (
           <mesh
             position={[0, -1.2, 0]}
@@ -633,7 +646,7 @@ export default function CityScene3D({
           home={home}
           resetSignal={resetViewSignal}
           distanceRange={
-            world ? [400, 260000] : [boardExtent * 0.09, boardExtent * 0.95]
+            world ? [400, 260000] : [420, boardExtent * 0.62]
           }
           bounds={
             core
@@ -644,6 +657,7 @@ export default function CityScene3D({
           }
           boundsCenter={core ? [core.centerX, core.centerZ] : undefined}
           maxPolarAngle={world ? 1.32 : 1.10}
+          onTargetChange={onViewTarget}
           fly={fly}
         />
         {pixel > 1 && <PixelPass pixelScale={pixel} />}
