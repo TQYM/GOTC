@@ -55,7 +55,7 @@ export default function CreateCity() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="grid gap-3 rounded-xl border border-line bg-bg-elev/50 p-4">
+      <div className="mt-4 grid gap-3">
         <label className="grid gap-1 text-sm">
           城市名称（可选）
           <input
@@ -63,7 +63,7 @@ export default function CreateCity() {
             maxLength={40}
             onChange={(e) => setName(e.target.value)}
             placeholder="我的更新计划"
-            className="min-h-11 rounded-md border border-line bg-bg px-3"
+            className="min-h-11 rounded-xl border border-[var(--wb-gold-line)] bg-black/25 px-3 text-[var(--wb-ink)] placeholder:text-[var(--wb-ink-muted)] focus:outline-none focus:border-[var(--wb-gold)]"
           />
         </label>
         <div className="flex flex-wrap gap-4 text-sm">
@@ -82,7 +82,7 @@ export default function CreateCity() {
             onChange={(e) => setSeed(e.target.value.replace(/[^\d]/g, ""))}
             placeholder="种子（可选，复现同款地块）"
             inputMode="numeric"
-            className="min-h-11 rounded-md border border-line bg-bg px-3"
+            className="min-h-11 rounded-xl border border-[var(--wb-gold-line)] bg-black/25 px-3 text-[var(--wb-ink)] placeholder:text-[var(--wb-ink-muted)] focus:outline-none focus:border-[var(--wb-gold)]"
             aria-label="种子"
           />
         )}
@@ -92,7 +92,7 @@ export default function CreateCity() {
             data-testid="create-city"
             disabled={busy}
             onClick={() => void go(false)}
-            className="min-h-12 rounded-md bg-accent px-5 font-semibold text-bg hover:opacity-90 disabled:opacity-60"
+            className="min-h-12 rounded-full bg-[var(--wb-gold)] px-6 font-bold text-[#1c1610] transition-transform duration-150 active:scale-[0.97] disabled:opacity-60"
           >
             {busy ? "正在创建…" : "创建新城"}
           </button>
@@ -100,7 +100,7 @@ export default function CreateCity() {
             type="button"
             disabled={busy}
             onClick={() => void go(true)}
-            className="min-h-12 rounded-md border border-line px-4 text-sm hover:bg-line disabled:opacity-60"
+            className="min-h-12 rounded-full border border-[var(--wb-gold-line)] px-5 text-sm text-[var(--wb-ink)] hover:bg-white/5 disabled:opacity-60"
           >
             离线演示（不连后端）
           </button>
@@ -113,23 +113,23 @@ export default function CreateCity() {
           onChange={(e) => setCode(normalizeCityCode(e.target.value).slice(0, 8))}
           onKeyDown={(e) => { if (e.key === "Enter") join(); }}
           placeholder="输入 8 位城市码继续经营"
-          className="min-h-11 min-w-56 flex-1 rounded-md border border-line bg-bg-elev px-3 font-mono tracking-widest"
+          className="min-h-11 min-w-56 flex-1 rounded-xl border border-[var(--wb-gold-line)] bg-black/25 px-3 font-mono tracking-widest text-[var(--wb-ink)] placeholder:font-sans placeholder:tracking-normal placeholder:text-[var(--wb-ink-muted)] focus:outline-none focus:border-[var(--wb-gold)]"
           aria-label="城市码"
         />
-        <button type="button" data-testid="join-city" onClick={join} className="min-h-11 rounded-md border border-line px-4 font-semibold">
+        <button type="button" data-testid="join-city" onClick={join} className="min-h-11 rounded-full border border-[var(--wb-gold-line)] px-5 font-semibold text-[var(--wb-ink)] hover:bg-white/5">
           加入城市
         </button>
       </div>
       {err && <p role="alert" className="text-sm text-red-400">{err}</p>}
       {recent.length > 0 && (
         <section aria-label="最近城市" className="grid gap-1">
-          <h2 className="text-sm font-semibold">最近经营</h2>
+          <h2 className="text-xs font-semibold tracking-wide text-[var(--wb-ink-muted)]">最近经营</h2>
           {recent.map((item) => (
             <button
               key={item.cityCode}
               type="button"
               onClick={() => router.push(`/game?session=${item.cityCode}`)}
-              className="flex min-h-11 items-center justify-between rounded-md px-2 text-left text-sm hover:bg-line"
+              className="flex min-h-11 items-center justify-between rounded-lg px-2 text-left text-sm text-[var(--wb-ink)] hover:bg-white/5"
             >
               <span>{item.name} · 第 {item.cityYear} 年</span>
               <code>{item.cityCode}</code>
