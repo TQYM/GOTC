@@ -42,6 +42,8 @@ export interface CameraRigProps {
   distanceRange?: [number, number];
   /** 视点可平移范围（世界坐标半宽 [x, z]），缺省为 extent × 0.6 */
   bounds?: [number, number];
+  /** 视点可平移范围的矩形中心（缺省原点；全域模式用于把视角锁在东西朝海） */
+  boundsCenter?: [number, number];
   /** 飞行请求：token 变化时在 duration ms 内平滑飞到目标机位（0 = 瞬移） */
   fly?: {
     pos: [number, number, number];
@@ -60,6 +62,7 @@ export default function CameraRig({
   resetSignal = 0,
   distanceRange,
   bounds,
+  boundsCenter,
   fly = null,
 }: CameraRigProps) {
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
@@ -150,6 +153,27 @@ export default function CameraRig({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fly?.token]);
 
+  // 兜底：任何操作（拖拽平移 / zoomToCursor）之后都把视点拉回允许范围
+  // R3F 惯用法：useFrame 回调内直接改 camera/controls，immutability 规则在此不适用
+  /* eslint-disable react-hooks/immutability */
+  useFrame(() => {
+    const c = controls.current;
+    if (!c) return;
+    const [limX, limZ] = bounds ?? [extent * 0.6, extent * 0.6];
+    const [cx, cz] = boundsCenter ?? [0, 0];
+    const nx = THREE.MathUtils.clamp(c.target.x, cx - limX, cx + limX);
+    const nz = THREE.MathUtils.clamp(c.target.z, cz - limZ, cz + limZ);
+    if (nx !== c.target.x || nz !== c.target.z) {
+      const dx = nx - c.target.x;
+      const dz = nz - c.target.z;
+      c.target.set(nx, c.target.y, nz);
+      camera.position.x += dx;
+      camera.position.z += dz;
+      c.update();
+    }
+  });
+  /* eslint-enable react-hooks/immutability */
+
   useFrame(() => {
     const f = flight.current;
     const c = controls.current;
@@ -188,8 +212,9 @@ export default function CameraRig({
       .addScaledVector(right.current, r * speed);
     // 视点中心不离开地图 / 沙盘太远
     const [limX, limZ] = bounds ?? [extent * 0.6, extent * 0.6];
-    const nx = THREE.MathUtils.clamp(c.target.x + move.current.x, -limX, limX);
-    const nz = THREE.MathUtils.clamp(c.target.z + move.current.z, -limZ, limZ);
+    const [cx, cz] = boundsCenter ?? [0, 0];
+    const nx = THREE.MathUtils.clamp(c.target.x + move.current.x, cx - limX, cx + limX);
+    const nz = THREE.MathUtils.clamp(c.target.z + move.current.z, cz - limZ, cz + limZ);
     move.current.set(nx - c.target.x, 0, nz - c.target.z);
     c.target.add(move.current);
     camera.position.add(move.current);
