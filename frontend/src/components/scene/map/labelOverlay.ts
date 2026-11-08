@@ -6,10 +6,16 @@ import * as THREE from "three";
 import type { MapLabel } from "@/lib/map/types";
 
 export const MAX_VISIBLE_LABELS = 300;
-const STYLE: Record<number, string> = {
-  5: "font-size:15px;color:#8a6200;font-weight:700",
-  4: "font-size:13px;color:#1f5f9e;font-weight:600",
-  3: "font-size:12px;color:#22746b;font-weight:600",
+const COLOR: Record<number, string> = {
+  5: "color:#8a6200;font-weight:700",
+  4: "color:#1f5f9e;font-weight:600",
+  3: "color:#22746b;font-weight:600",
+};
+/** 字号随相机距离分三档：近看街区时字大，拉远看全城时字小（与建筑在屏幕上的大小一致） */
+const FONT: Record<number, [number, number, number]> = {
+  5: [12, 15, 19],
+  4: [10, 13, 16],
+  3: [9, 12, 15],
 };
 
 export function labelVisible(importance: number, distance: number) {
@@ -56,7 +62,10 @@ export class LabelOverlay {
       placed.push([x0, y0, x0 + w, y0 + lh]);
       const node = this.node(used);
       if (node.textContent !== l.name) node.textContent = l.name;
-      const style = STYLE[Math.min(5, l.importance)] ?? STYLE[3];
+      const imp = Math.min(5, l.importance);
+      const tier = dist > 22000 ? 0 : dist > 9000 ? 1 : 2;
+      const size = (FONT[imp] ?? FONT[3])[tier];
+      const style = `font-size:${size}px;${COLOR[imp] ?? COLOR[3]}`;
       if (node.dataset.s !== style) {
         node.style.cssText = style;
         node.dataset.s = style;

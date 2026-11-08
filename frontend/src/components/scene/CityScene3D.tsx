@@ -216,6 +216,10 @@ function CellBadge({
     const py = ((1 - v.current.y) / 2) * size.height;
     // 在相机背后就不显示
     div.style.display = v.current.z > 1 ? "none" : "block";
+    // 字号跟建筑在屏幕上的大小走：贴脸看时大，拉远时收小
+    const dist = camera.position.distanceTo(v.current);
+    const font = Math.round(Math.min(26, Math.max(12, 90000 / Math.max(dist, 400))));
+    if (div.style.fontSize !== `${font}px`) div.style.fontSize = `${font}px`;
     div.style.transform = `translate(${Math.round(px)}px, ${Math.round(py)}px) translate(-50%, -100%)`;
   });
 

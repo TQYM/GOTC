@@ -269,7 +269,12 @@ export default function AmbientTraffic({
         mesh.count = slice.length;
         for (let i = 0; i < slice.length; i += 1) {
           const { position, yaw } = sampleMover(slice[i], paths);
-          dummy.position.set(position.x, position.y + 1.6, position.z);
+          // 小人贴图是「脚在底边」的 billboard：中心要抬到身高一半，否则下半身埋进地表
+          dummy.position.set(
+            position.x,
+            position.y + (2.6 * scale) / 2,
+            position.z,
+          );
           dummy.rotation.set(0, yaw, 0);
           dummy.quaternion.copy(camQuat);
           dummy.rotateY(Math.PI);
@@ -287,7 +292,12 @@ export default function AmbientTraffic({
       mesh.count = cars.current.length;
       for (let i = 0; i < cars.current.length; i += 1) {
         const { position, yaw } = sampleMover(cars.current[i], paths);
-        dummy.position.set(position.x, position.y + 0.4, position.z);
+        // 车身 1.4 高，中心抬到 0.7×倍率
+        dummy.position.set(
+          position.x,
+          position.y + (1.4 * scale) / 2,
+          position.z,
+        );
         dummy.rotation.set(0, yaw, 0);
         dummy.scale.setScalar(1.7 * scale);
         dummy.updateMatrix();

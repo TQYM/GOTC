@@ -360,7 +360,8 @@ function existingAssetHeight(asset: ExistingAsset): number {
  * 2.4km 的 CBD 沙盘保持真实比例（1 倍），大棋盘按 worldSize/8000 放大（48km → 6 倍）。
  */
 export function heightExaggeration(worldSize: number): number {
-  return Math.max(1, worldSize / 8000);
+  // 48km 棋盘上真实楼高（几十米）在屏幕里几乎看不见：按棋盘尺度放大，但至少 1 倍
+  return Math.max(1, worldSize / 5200);
 }
 
 /** Keep chunk identity so expensive extrusion can be deferred until a chunk is visible. */
