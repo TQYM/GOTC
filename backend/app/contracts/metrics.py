@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field
 
 class Phase(StrEnum):
     BRIEFING = "briefing"
+    BUILDING = "building"
+    PROJECTING = "projecting"
+    # 以下仅供旧 sim/narrator 单元测试与内部兼容；saves v2 路由不暴露这些阶段。
     BUILD = "build"
     POLISH = "polish"
     LOCKED = "locked"

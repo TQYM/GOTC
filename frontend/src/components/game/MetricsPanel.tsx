@@ -55,9 +55,20 @@ const CORE: {
 export default function MetricsPanel() {
   const metrics = useGame((s) => s.metrics);
   const pulse = useGame((s) => s.pulse);
+  const id = useGame((s) => s.id);
+  const cityName = useGame((s) => s.cityName);
+  const cityYear = useGame((s) => s.cityYear);
   if (!metrics) return null;
   return (
-    <ul className="flex flex-col gap-2" data-testid="metrics-panel">
+    <div className="flex flex-col gap-2">
+      <header className="rounded-lg border border-line bg-bg-elev px-3 py-2">
+        <div className="truncate text-sm font-semibold">{cityName ?? "CITY20 城市"}</div>
+        <div className="mt-1 flex items-center justify-between gap-2 text-xs text-fg-muted">
+          <span>第 {cityYear} 年</span>
+          {id && <code data-testid="city-code" title="8 位城市码">{id}</code>}
+        </div>
+      </header>
+      <ul className="flex flex-col gap-2" data-testid="metrics-panel">
       {CORE.map(({ key, label, note, fmt, goodUp }) => {
         const dir = pulse.dir[key];
         const good = dir ? dir > 0 === goodUp : null;
@@ -79,6 +90,7 @@ export default function MetricsPanel() {
           </li>
         );
       })}
-    </ul>
+      </ul>
+    </div>
   );
 }

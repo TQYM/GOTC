@@ -6,9 +6,10 @@
  * - 「快进一年」「推演 10 年」「生成报告」只在 building 可用；后端暂不支持的能力置灰并说明原因；
  * - 当前 v1 后端的「推演」= finalize（会锁定本局），点击前二次确认。
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { GamePhase } from "@/lib/api";
 import { useGame } from "@/store/game";
+import ReportHistory from "./ReportHistory";
 
 const PHASE_LABEL: Record<GamePhase, string> = {
   briefing: "规划简报",
@@ -24,7 +25,7 @@ const PHASE_TONE: Record<GamePhase, string> = {
   report: "bg-violet-500/25 text-violet-100",
 };
 
-const NOT_YET = "当前后端版本暂不支持，存档接口（10 号文档 §5）上线后可用";
+const NOT_YET = "当前后端未启用此能力；请使用 saves v2 完整后端";
 
 function ActionButton({
   testId,
@@ -62,11 +63,18 @@ export default function PhaseBanner() {
   const busy = useGame((s) => s.busy);
   const projection = useGame((s) => s.projection);
   const projectionYear = useGame((s) => s.projectionYear);
+  const projectionId = useGame((s) => s.projectionId);
+  const projectionBaseYear = useGame((s) => s.projectionBaseYear);
+  const projectionBaseSeq = useGame((s) => s.projectionBaseSeq);
+  const cityReport = useGame((s) => s.cityReport);
   const advanceYear = useGame((s) => s.advanceYear);
   const project = useGame((s) => s.project);
   const makeReport = useGame((s) => s.makeReport);
   const backToBuilding = useGame((s) => s.backToBuilding);
+  const askMentor = useGame((s) => s.askMentor);
+  const loadReports = useGame((s) => s.loadReports);
   const [confirmLock, setConfirmLock] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const caps = api?.capabilities;
   const building = phase === "building";
@@ -76,6 +84,21 @@ export default function PhaseBanner() {
     projectionYear > 0 && lastYear > 0
       ? Math.min(1, (projectionYear - firstYear + 1) / projection.length)
       : 0;
+
+  useEffect(() => {
+    if (api?.kind !== "v2" || phase !== "projecting" || projection.length === 0) return;
+    const currentIndex = projection.findIndex((item) => item.year === projectionYear);
+    const nextIndex = currentIndex < 0 ? 0 : currentIndex + 1;
+    if (nextIndex >= projection.length) return;
+    const timer = window.setTimeout(() => {
+      useGame.getState().applyEvent({
+        id: null,
+        event: "projection_step",
+        data: projection[nextIndex],
+      });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [api?.kind, phase, projection, projectionYear]);
 
   return (
     <div
@@ -110,8 +133,17 @@ export default function PhaseBanner() {
             </span>
           </span>
         )}
+        {phase === "projecting" && projectionId && (
+          <span className="rounded-full bg-bg-elev/90 px-3 py-1 text-xs" data-testid="projection-identity">
+            基准 第 {projectionBaseYear} 年 / seq {projectionBaseSeq}
+          </span>
+        )}
+        {phase === "report" && cityReport?.baseYear !== undefined && (
+          <span className="rounded-full bg-bg-elev/90 px-3 py-1 text-xs" data-testid="report-identity">
+            基准 第 {cityReport.baseYear} 年 / seq {cityReport.baseSeq}
+          </span>
+        )}
       </div>
-
       <div className="pointer-events-auto flex flex-wrap items-center gap-2">
         {building && (
           <>
@@ -149,7 +181,28 @@ export default function PhaseBanner() {
               }
               onClick={() => void makeReport()}
             />
+            <ActionButton
+              testId="mentor"
+              label="请教导师"
+              hint="异步获取规划建议，不阻塞经营"
+              disabled={busy || !caps?.mentor}
+              why={NOT_YET}
+              onClick={() => void askMentor()}
+            />
           </>
+        )}
+        {phase !== "briefing" && (
+          <ActionButton
+            testId="report-history-toggle"
+            label="历史报告"
+            hint="查看最近 20 份城市诊断"
+            disabled={!caps?.reportHistory}
+            why={NOT_YET}
+            onClick={() => {
+              setHistoryOpen((value) => !value);
+              if (!historyOpen) void loadReports();
+            }}
+          />
         )}
         {(phase === "projecting" || phase === "report") &&
           caps &&
@@ -163,6 +216,8 @@ export default function PhaseBanner() {
             />
           )}
       </div>
+
+      {historyOpen && <ReportHistory onClose={() => setHistoryOpen(false)} />}
 
       {confirmLock && (
         <div

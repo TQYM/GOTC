@@ -372,18 +372,22 @@ class Narrator:
     # ---- 规划导师 ----
 
     async def mentor_comment(self, session: GameSession, force: bool = False) -> dict | None:
-        """90s 定时点评（04 §4）；polish 期带 Top3 结构问题。由 main 的调度循环驱动。"""
+        """每 10 个领域 op 或主动请教触发；building 带 Top3 结构问题。"""
         if session.closed or session.finalized:
             return None
-        if session.phase not in (Phase.BUILD, Phase.POLISH):
+        if session.phase not in (Phase.BUILD, Phase.BUILDING, Phase.POLISH):
             return None
         state = self.mentor_state_of(session)
-        if not force and self._now() - state.last_at < MENTOR_INTERVAL_SEC:
+        if (
+            not force
+            and session.phase is not Phase.BUILDING
+            and self._now() - state.last_at < MENTOR_INTERVAL_SEC
+        ):
             return None
         metrics = session.metrics
         top_issues = (
             [issue["comment"] for issue in render_mentor_top3(metrics)]
-            if session.phase is Phase.POLISH
+            if session.phase in (Phase.BUILDING, Phase.POLISH)
             else []
         )
         data = None
@@ -443,15 +447,15 @@ class Narrator:
         return {"comment": comment, "theory_refs": refs[:3], "severity": severity}
 
     async def ai_report(self, session: GameSession, result: FinalizeResult) -> Report | None:
-        """终局 AI 报告（02 §3.8 report_ready 的 AI 版；REST finalize 恒为模板即时返回）。
+        """当前城市体检的 AI 叙述；REST 先返回确定性的模板与同一份得分。
 
-        20s 超时/解析失败/字数越界一律返回 None → 调用方沿用模板报告。
+        超时/解析失败/字数越界一律返回 None → 调用方保留模板报告，城市可继续经营。
         """
         if not self.llm.available:
             return None
-        final_metrics = result.projection[-1].metrics
+        current_metrics = result.projection[-1].metrics
         system = (
-            "你是资深注册城乡规划师，为玩家写终局复盘。先肯定，再尖锐，最后给重来一次的建议。"
+            "你是资深注册城乡规划师，为城市管理者写当前城市体检。先肯定，再指出问题，最后给继续经营的建议。"
             "任务：输出 JSON，字段 overview（总体诊断）、dimensions（对象，键为 "
             "population/balance/green/traffic/happiness，各一句点评）、ending_story（结局故事）。"
             "硬约束：三段合计 400–700 字；只输出规定 JSON，不要 markdown 代码块，不要额外解释；"
@@ -459,7 +463,7 @@ class Narrator:
         )
         user = (
             f"城市名：{result.city_name}；结局：{result.ending.value}；"
-            f"五维得分：{result.scores.model_dump_json()}；期末指标：{final_metrics.model_dump_json()}。"
+            f"五维得分：{result.scores.model_dump_json()}；当前指标：{current_metrics.model_dump_json()}。"
         )
         try:
             data = await self.llm.chat_json(

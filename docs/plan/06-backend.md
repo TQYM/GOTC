@@ -14,93 +14,115 @@
 | 包管理 | uv | 速度碾压 pip；生成 requirements 锁文件供 CI |
 | 配置 | 环境变量（pydantic-settings）+ YAML 参数文件 | 密钥走 env，平衡参数走 YAML（进 git） |
 | 测试 | pytest | 契约测试 + sim 单测 |
-| 进程模型 | 单进程单实例（uvicorn 单 worker） | 比赛场景单实例够用；会话态在内存，避免跨进程一致性麻烦 |
+| 持久化 | SQLite（WAL）+ aiosqlite | 单文件 `data/city20.db`；saves/ops/snapshots/reports 事件溯源，数据库是唯一事实源 |
+| 进程模型 | 单进程单实例（uvicorn 单 worker） | per-save asyncio.Lock 与 SSE 扇出只在单进程内协调；内存仅作热点缓存，重启后从 SQLite 恢复 |
 
-明确不用的：数据库（会话放内存 + 进程重启即丢，够用且零依赖）、Redis（同上）、ORM（没有库表）、Celery（定时用 asyncio 任务即可）。
+明确不用的：外部数据库服务、Redis、Celery，以及任何把内存当作存档事实源的设计。数据访问使用参数化 aiosqlite，不强制引入 ORM；备份使用 SQLite 在线安全备份能力，不直接复制正在写入的 WAL 文件。
 
 ## 2. 模块分层（目录骨架）
 
 ```
 backend/
 ├── app/
-│   ├── main.py            # FastAPI 入口：挂路由、中间件、异常处理器
+│   ├── main.py            # FastAPI 入口：只挂 saves v2 路由、中间件、异常处理器
 │   ├── config.py          # 环境变量 + 参数文件加载（03 §8 的唯一出处）
 │   ├── contracts/         # Pydantic 模型，逐字段对应 02 文档（文件名=数据形状）
-│   │   ├── parcel.py  tile.py  metrics.py  events.py  errors.py
+│   │   ├── parcel.py  tile.py  metrics.py  save.py  operation.py
+│   │   ├── projection.py  report.py  events.py  errors.py
 │   ├── api/               # REST 路由层：只做参数接收/校验/调用服务/装信封
-│   │   ├── sessions.py    # 02 §3 全部端点
-│   │   └── stream.py      # SSE 端点
+│   │   ├── saves.py       # 02 §3 全部 create/get/start/operations/project/report/mentor
+│   │   └── events.py      # GET /api/saves/{city_code}/events
 │   ├── core/
-│   │   ├── session.py     # 会话对象：地块+已放区块+指标+阶段+projection+事件缓冲
-│   │   ├── store.py       # 会话注册表：id→会话，内存 dict + 过期清理
-│   │   └── timer.py       # 阶段调度器：briefing/build/polish 的倒计时与阶段切换
+│   │   ├── city_state.py  # 完整 CityState；热点缓存不是事实源
+│   │   └── locks.py       # per-save asyncio.Lock，串行化同一存档写操作
+│   ├── persistence/
+│   │   ├── db.py          # aiosqlite 连接、WAL、事务与城市码唯一约束
+│   │   ├── repository.py  # saves/ops/snapshots/reports；幂等结果、快照与增量重放
+│   │   └── backup.py      # SQLite 在线安全备份与恢复校验
 │   ├── sim/
-│   │   ├── generator.py   # 03 §2 世界生成
-│   │   ├── engine.py      # 03 §3-4 校验与全量重算
-│   │   ├── projection.py  # 03 §6 十年推演
-│   │   ├── endings.py     # 03 §7 结局判定
+│   │   ├── generator.py   # 03 §2 沙盒世界生成
+│   │   ├── parcel_loader.py # 默认真实北京数据包加载与 data_version 校验
+│   │   ├── engine.py      # 03 §3-4 校验与全量重算（含 redevelop）
+│   │   ├── annual.py      # advance 与 project 共用的确定性年度步进
+│   │   ├── projection.py  # 03 §6 快照副本上的只读推演
+│   │   ├── endings.py     # 当前报告快照的城市体检标签判定（字段名 ending）
 │   │   ├── events.py      # 03 §7 环境事件池
 │   │   └── templates.py   # 04 §6 降级文案库（模板槽位）
 │   ├── narrate/
-│   │   ├── router.py      # 触发规则→决定调哪个角色；节流、合并、丢弃策略
+│   │   ├── router.py      # 提交后触发；8s 节流、敏感度路由、每 10 领域 op/主动导师
 │   │   ├── roles.py       # 三角色：组装上下文、调模型、解析、失败降级
 │   │   ├── llm.py         # OpenAI 兼容客户端封装（统一 chat/completions 形状）
 │   │   └── personas.py    # 市民人设、导师理论库等静态素材
 │   └── sse/
-│       ├── broadcaster.py # 事件入队、按会话广播、200 条环形缓冲、心跳
-│       └── replay.py      # Last-Event-ID 断点补发
-├── sim-config.yaml        # 03 §8 参数表落盘
+│       ├── broadcaster.py # 按 city_code 广播、200 条环形缓冲、15s comment 心跳
+│       └── replay.py      # Last-Event-ID 补发；溢出/重启不确定时发 snapshot
+├── sim-config.yaml        # 03 §8 参数表落盘（不含现实倒计时）
+├── data/city20.db         # 本地 SQLite 存档（运行产物，不进 git）
 ├── tests/
 │   ├── contract/          # 按 02 文档逐端点、逐事件类型的样例测试
+│   ├── persistence/       # 重放、快照、幂等、project 零写入、重启与备份恢复
 │   ├── sim/               # 03 公式单测（含黄金样例：固定布局→固定指标）
 │   └── narrate/           # 降级链路、节流、解析失败的测试
 └── pyproject.toml
 ```
 
-分层规则：api 层不碰 sim 内部；sim 层不 import narrate（单向依赖：api → sim / narrate → sse → store，core 被所有人依赖但不依赖任何人）。`llm.py` 是 narrate 与具体模型之间的唯一缝隙，换模型只动它。
+分层规则：api 层不碰 sim 内部；sim 层不 import narrate；persistence 负责事务与事实恢复，core 只承载完整状态和锁。领域写路径为 `api → locks → sim → repository → sse（提交后）`；AI 位于提交后的旁路，不能回写 sim 数值。`llm.py` 是 narrate 与具体模型之间的唯一缝隙，换模型只动它。实际文件名可调整，但不能恢复旧 sessions 路由或倒计时 timer。
 
-## 3. 会话生命周期
+## 3. 存档生命周期与写事务
 
-| 阶段 | 行为 |
+| 环节 | 行为 |
 |---|---|
-| 创建 | POST /sessions：用 seed 生成地块（sim.generator）→ 建会话对象 → 立即返回（briefing 文案先给模板版；AI 版异步生成后不入库，前端不从 REST 等它） |
-| 进行 | 内存对象承载一切；每次操作走「校验→变更→全量重算→广播 tick→narrate.router 异步派发」 |
-| 过期 | 创建后 40 分钟无操作 → 从注册表清除（无持久化，重启即清，比赛可接受） |
-| 并发 | 单会话一把锁串行化所有操作（asyncio.Lock）；SSE 订阅只读，不加锁 |
+| 创建 | `POST /api/saves`：默认 parcel_loader 加载 `beijing_cbd`，`sandbox` 才用 seed 调 sim.generator；生成唯一 8 位 Crockford Base32 city_code，并在一个事务中写入 saves 与初始完整状态，返回 phase=briefing、city_year=1、last_seq=0 的 SaveState |
+| 开始 | `POST …/start`：仅持久化 briefing→building，重复调用返回当前状态；`phase_change` 在提交后广播 |
+| 领域写 | place/remove/redevelop/advance 在 per-save 锁内先查 client_op_id，再校验、sim 重算、分配 seq；op（规范 payload + 首次 result_json）、SaveState 与每 50 op 可选快照同事务提交，提交后才广播 |
+| 只读推演 | `POST …/project` 读取一致的 `base_year/base_seq` 快照，在副本上运行共享年度步进；不写 ops/saves/snapshots/reports，不推进实际年份或资金 |
+| 当前报告 | `POST …/report` 在当前快照计算 scores/ending，写 reports 历史但不写领域 op、不增加 last_seq；可先返回模板，AI 后续以相同 report_id 更新并广播。GET reports 只读，新到旧最多 20 份 |
+| 恢复 | 进程重启或缓存未命中时，从 SQLite 读最近快照 + 重放增量 ops；恢复快照范围必须满足 02 §6，不得只恢复 tiles/metrics/year/phase |
+| 保留 | 存档永不过期，不提供 TTL 清理、离线编辑或旧式重开；城市管理者另起城市 = 创建新 save |
+| 并发 | 每个 save 一把 asyncio.Lock 串行化领域写操作；`base_seq` 落后不拒绝，占用/资金等业务规则仍按 02 返回错误。SSE 订阅不加写锁 |
 
-## 4. SSE 实现要点（对齐 02 §3.8）
+AI 简报或叙事可以异步生成，但不得拖延领域事务；AI 事件、report 和 project 均不增加领域 op seq。
 
-- 每会话一个 broadcaster：事件先进环形缓冲（200 条）再推给活跃订阅生成器。
-- 心跳：定时任务每 15s 发空 delta 的 tick，同时兼作时间基准校正源。
-- 断点补发：客户端带 Last-Event-ID 时，从缓冲里找该 id 之后的事件补发；不在缓冲范围内则从当前快照发一条全量 tick + phase_change 重置前端。
-- 阶段切换、news/citizen/mentor、projection_step、report_ready 全部走同一 broadcaster，事件 id 单调递增；projection_step 只播放 finalize 时已计算的切片。
+## 4. SSE 实现要点（对齐 02 §4）
+
+- 每存档一个以 city_code 为键的 broadcaster：事件进入 200 条环形缓冲后推给活跃订阅；缓冲只是断线优化，SQLite 才是城市事实源。
+- 领域事件有独立的单调整数 SSE `id`，与 op seq 是两套序号。`op_applied` 携带完整 OperationResult；advance 另发同 seq/client_op_id 的 `city_year`，客户端按 02 幂等处理。
+- 心跳每 15s 发送 SSE comment `: heartbeat`，不发送 tick，也不用心跳推进年份或校正倒计时。
+- 新连接先订阅再决定补发/快照，处理 cutoff 前去重。Last-Event-ID 在缓冲内则补发；无缓冲、溢出或进程重启无法确认时发送完整 `snapshot`。
+- phase_change/news/citizen/mentor/projection_step/report_ready/error 全部走同一 broadcaster。projection_step 只播放 project 已计算的切片并携带 projection_id/base_year/base_seq；它不写回，也不强制切换他端 UI。
+- snapshot 总是完整 SaveState。客户端 seq 跳号时直接 GET 存档全量恢复，后端不伪造缺失 op。
 
 ## 5. AI 编排层（narrate）
 
-- **入口**：sim 重算后产出 MetricsDiff → router 按 [04](04-ai-roles.md) §2-4 的触发规则与节流判定是否需要调用角色；需要则把任务丢进 asyncio 队列（每会话深度 ≤3，超出丢弃并触发模板兜底）。
-- **调用**：roles 组装系统提示词 + 上下文（指标快照 + diff + 防复读样本 + 注入防护声明），经 llm.py 发送；超时 news/citizen 8s、mentor 20s。
-- **解析**：按 02 §3.8 各事件的 data 形状校验（Pydantic）；失败重试 1 次；再败走 templates.py 模板。
+- **入口**：领域 op 与状态**提交并广播后**，MetricsDiff → router 按 [04](04-ai-roles.md) §2-4 的触发规则与节流判定是否需要调用角色；需要则把任务丢进 asyncio 队列（每存档深度 ≤3，超出丢弃该次 AI 尝试并使用模板兜底）。导师计数只累计已提交 place/remove/redevelop/advance，每 10 op 一次；主动 mentor 走 202 + SSE。
+- **调用**：roles 组装系统提示词 + 上下文（指标快照 + diff + base_year/base_seq + 防复读样本 + 注入防护声明），经 llm.py 发送；超时 news/citizen 8s、mentor/report 20s。
+- **解析**：按 02 §4 各事件的 data 形状校验（Pydantic）；失败重试 1 次；再败走 templates.py 模板。
 - **回推**：成功/模板文案都走同一个 broadcaster，前端无感知。
 - **隔离**：llm.py 任何异常都不冒泡到 api 层；llm 整体不可用时 router 直接走模板分支，游戏功能零影响。
 
 ## 6. 幂等与一致性
 
-- place/remove/advance/finalize 均在后端串行执行（§3 锁），天然幂等于会话内。
-- 前端重复提交同一 place（双击/重试）：以「格占用校验」天然兜底——第一次成功后第二次返回 409 cell_occupied，前端按错误协议展示即可。
-- finalize 只允许生效一次：会话内记 finalized 标志，重复调用直接返回首次结果（投影是纯函数，结果相同）。
+- place/remove/redevelop/advance 都在 per-save 锁与 SQLite 事务内执行。`(save_id, client_op_id)` 有唯一约束；重复请求直接返回首次持久化的完整 `result_json`，不重复扣款、落格、分配 seq 或广播。
+- `client_op_id` 为 1–128 字符且在存档内唯一；`base_seq` 只用于客户端回显/诊断，落后不导致拒绝。不能再用 cell_occupied 代替请求幂等，因为它会把网络重试错误地变成业务冲突。
+- op 的 seq 在事务内分配，op、状态更新与可能的 50-op 快照一起提交；只有提交成功才广播。AI 调用失败、超时或解析失败不影响首次操作结果。
+- project 是只读纯计算，可重复请求并产生新的只读预览；report 可反复生成并各写一条报告历史，但二者都不是领域 op，不需要一次性结算标志，也不锁定城市。
+- 恢复以最近快照 + 增量 ops 重放为准；完整 SimConfig、parcel/data_version、实际入住、环境状态与 redevelop 惩罚等 02 §6 状态必须纳入快照，不能依赖进程内隐含值。
 
 ## 7. 观测与日志
 
-- 结构化日志（JSON 行）：每次操作记 session_id / 端点 / 耗时 / 结果；narrate 记角色 / 模型 / 时延 / 是否降级。比赛现场排障全靠它。
-- GET /healthz：返回进程存活 + 会话数 + 配置摘要（脱敏），供部署脚本探活。
+- 结构化日志（JSON 行）：每次操作记 save_id / city_code / op_type / seq / client_op_id / 耗时 / 结果；project/report 与领域 op 分开计数，narrate 记角色 / 模型 / 时延 / 是否降级。不得记录 LLM 密钥。
+- GET /healthz：返回进程存活 + 存档数 + SQLite 可用性/WAL 状态 + 配置摘要（脱敏），供部署脚本探活；备份与恢复说明链接到 10 和本文件。
+- SQLite 使用 WAL 与参数化写入，运行只启动一个 uvicorn worker。在线备份必须使用 SQLite backup API 或等价安全机制，恢复后打开数据库并核对存档/ops/snapshots/reports；不得在写入期间只复制主 db 文件充当一致备份。
 
 ## 8. 后端验收标准（DoD，逐条打勾）
 
-1. 02 契约全部端点与事件类型按样例测试全绿；错误协议 7 个 code 逐一命中过。
-2. 相同 seed + 相同操作序列，两次运行最终 projection 逐字段一致（确定性测试）。
-3. finalize 在 48×48 满布局最坏情况下 <2s（契约性能）。
-4. 全量重算 <10ms（抽样 100 次取 p95）。
-5. 关闭所有 LLM 环境变量后：完整一局可玩、事件流有模板文案、报告有模板叙事（降级演示）。
-6. SSE 断连 30 秒内重连可补发；缓冲溢出边界（断 200 条以上）按当前快照恢复。
-7. sim-config.yaml 每个参数改值后，行为变化符合 03 文档语义（参数化抽查 5 项）。
-8. /healthz 可访问且不泄露密钥。
+1. 02 saves v2 全部端点与事件类型按样例测试全绿；错误协议 7 个 code 逐一命中过，旧 sessions/finalize/restart/tick 不出现在应用路由或事件表。
+2. 相同存档 seed、parcel 数据版本、完整 SimConfig 与领域 op 序列，两次运行 SaveState 和相同输入的 ProjectionResult 逐字段一致。
+3. 随机 200 个混合领域 op 落库后，杀掉进程并重放，与在线状态逐字段一致；>50 op 时最近快照 + 增量重放 == 全量重放。
+4. project 在 48×48 满布局最坏情况下满足 03 §9 性能目标，且对 ops/saves/snapshots/reports 零写入；report 不增加 last_seq，城市可继续经营。
+5. 全量重算 <10ms（抽样 100 次取 p95）；advance 与 project 共用年度步进，区别只有是否写回。
+6. 相同 `(save_id, client_op_id)` 重试返回首次完整结果且不产生第二次效果；base_seq 落后不拒绝，并发写按存档串行。
+7. 关闭所有 LLM 环境变量后：创建→start→建设→advance×3→project→report→继续经营全流程可玩，事件流和报告有模板叙事。
+8. SSE 断连 30 秒内重连可补发；缓冲溢出（断 200 条以上）或重启无法确认时发 snapshot；双端 seq 跳号走全量恢复，自端广播不重复。
+9. sim-config.yaml 每个参数改值后，行为变化符合 03 文档语义（参数化抽查 5 项）；不含现实阶段时长配置。
+10. /healthz 可访问且不泄露密钥，能报告 SQLite 状态；在线备份文件可打开，恢复后内容一致。

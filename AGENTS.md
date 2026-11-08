@@ -6,7 +6,7 @@ Collaboration: collaborative
 Baseline: main
 Default branch: main
 Release: Web 演示按 `docs/plan/07-qa-ops.md` 本地启动；macOS / Windows / Android / iOS 四端安装包按 `docs/plan/09-cross-platform.md`（M6 弹性交付，CI artifacts / 本地 Xcode）
-Validation: 前端 `cd frontend && npm ci && npm run lint && npm run build`；后端 `cd backend && pip install -e ".[dev]"`（无 pyproject 时 `pip install -r requirements.txt`）后 `ruff check . && pytest -q`。两侧均以存在依赖清单为前提，脚手架未落地时按 CI 的 detect 逻辑跳过；纯文档改动按设备级规范第 5 节的文档例外执行
+Validation: 前端 `cd frontend && npm ci && npm test && npm run lint && npm run build`；后端 `cd backend && pip install -e ".[dev]"`（无 pyproject 时 `pip install -r requirements.txt`）后 `ruff check . && pytest -q`。两侧均以存在依赖清单为前提，脚手架未落地时按 CI 的 detect 逻辑跳过；纯文档改动按设备级规范第 5 节的文档例外执行
 Worktree: `~/项目/.wt/城市模拟沙盘/<slug>`
 
 ## 这是什么
@@ -31,7 +31,7 @@ CITY20：AI 驱动的城市更新模拟沙盘，**不限时**。玩家以城市�
 ## 本地开发（脚手架落地后）
 
 - 后端：在 `backend/` 下 `uvicorn app.main:app --reload --port 8000`（目录骨架见 `docs/plan/06-backend.md`）。
-- 前端：在 `frontend/` 下 `npm run dev`，用 `API_BASE=http://localhost:8000` 指向本地后端。
+- 前端：在 `frontend/` 下 `npm run dev`，用 `NEXT_PUBLIC_API_BASE=http://localhost:8000` 指向本地后端。
 - 无任何 LLM key 时必须能完整打完一局（降级链路是验收项，见 `docs/plan/07-qa-ops.md`）。
 - 依赖与构建产物（`node_modules`、`.next`、`.venv`、`__pycache__` 等）不进项目卷：放 `$BUILD_SCRATCH_ROOT` 或交给 CI（设备级规范第 5c、8 节）。
 

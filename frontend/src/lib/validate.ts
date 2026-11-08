@@ -23,25 +23,44 @@ const TERRAIN_REASON: Partial<Record<Terrain, string>> = {
   occupied: "这块是既有建筑，先拆迁",
 };
 
-/** 桥：锚点须在河道，沿行向两侧覆盖整段连续河面（与当前后端 bridge_cells 一致） */
-function bridgeCells(parcel: Parcel, [r, c]: Cell): Cell[] {
-  const row = parcel.terrain[r];
-  if (!row || row[c] !== "river") return [[r, c]];
-  let left = c;
-  while (left - 1 >= 0 && row[left - 1] === "river") left--;
-  let right = c;
-  while (right + 1 < parcel.size && row[right + 1] === "river") right++;
-  const out: Cell[] = [];
-  for (let cc = left; cc <= right; cc++) out.push([r, cc]);
-  return out;
+/** 桥：锚点是西/北 bank，沿方向穿过至少一格 river，落在东/南 bank；覆盖格包含两岸。 */
+function bridgeCells(
+  parcel: Parcel,
+  [r, c]: Cell,
+  orientation: "horizontal" | "vertical",
+): Cell[] {
+  if (parcel.terrain[r]?.[c] !== "bank") return [[r, c]];
+  const dr = orientation === "vertical" ? 1 : 0;
+  const dc = orientation === "horizontal" ? 1 : 0;
+  const cells: Cell[] = [[r, c]];
+  let rr = r + dr;
+  let cc = c + dc;
+  if (parcel.terrain[rr]?.[cc] !== "river") return [...cells, [rr, cc]];
+  while (parcel.terrain[rr]?.[cc] === "river") {
+    cells.push([rr, cc]);
+    rr += dr;
+    cc += dc;
+  }
+  cells.push([rr, cc]);
+  return cells;
+}
+
+function validBridge(parcel: Parcel, cells: Cell[]): boolean {
+  if (cells.length < 3) return false;
+  const first = cells[0];
+  const last = cells[cells.length - 1];
+  return parcel.terrain[first[0]]?.[first[1]] === "bank" &&
+    parcel.terrain[last[0]]?.[last[1]] === "bank" &&
+    cells.slice(1, -1).every(([r, c]) => parcel.terrain[r]?.[c] === "river");
 }
 
 export function expandCells(
   parcel: Parcel,
   type: TileType,
   anchor: Cell,
+  orientation: "horizontal" | "vertical" = "horizontal",
 ): Cell[] {
-  if (type === "util_bridge") return bridgeCells(parcel, anchor);
+  if (type === "util_bridge") return bridgeCells(parcel, anchor, orientation);
   const [h, w] = TILE_SPECS[type].footprint;
   const out: Cell[] = [];
   for (let dr = 0; dr < h; dr++)
@@ -83,8 +102,9 @@ export function checkPlacement(
   funds: number | null,
   type: TileType,
   anchor: Cell,
+  orientation: "horizontal" | "vertical" = "horizontal",
 ): PlacementCheck {
-  const cells = expandCells(parcel, type, anchor);
+  const cells = expandCells(parcel, type, anchor, orientation);
   const cost = estimateCost(parcel, type, cells);
   const fail = (
     code: PlacementCheck["code"],
@@ -108,8 +128,8 @@ export function checkPlacement(
   const isGreen = TILE_SPECS[type].category === "green";
   let warning: string | null = null;
   if (type === "util_bridge") {
-    if (parcel.terrain[anchor[0]][anchor[1]] !== "river")
-      return fail("invalid_placement", "桥要放在河道上");
+    if (!validBridge(parcel, cells))
+      return fail("invalid_placement", "桥要从西/北岸锚点穿过连续河面，到对岸 bank 落地");
   } else {
     for (const [r, c] of cells) {
       const t = parcel.terrain[r][c];

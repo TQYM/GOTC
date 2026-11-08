@@ -25,9 +25,11 @@ function snapshot(s: SessionState): CitySnapshot {
     id: s.session_id,
     parcel: s.parcel,
     tiles: s.tiles,
+    redevelopedAssetIds: [],
     metrics: s.metrics,
     phase: toGamePhase(s.phase),
     cityYear: s.metrics.at_year,
+    lastSeq: 0,
     projection: s.projection ?? [],
     projectionPublishedYear: s.projection_published_year ?? 0,
     scores: s.scores ?? null,
@@ -47,10 +49,11 @@ export const sessionsV1: CityApi = {
   },
 
   async create(seed) {
+    const value = typeof seed === "number" ? seed : seed?.seed;
     const r = await request<SessionCreated>(
       "POST",
       "/api/sessions",
-      seed === undefined ? {} : { seed },
+      value === undefined ? {} : { seed: value },
     );
     return { id: r.session_id };
   },
@@ -60,8 +63,8 @@ export const sessionsV1: CityApi = {
   },
 
   async startPlanning(id) {
-    const r = await request<AdvanceResult>("POST", `${base(id)}/advance`);
-    return { phase: toGamePhase(r.phase) };
+    await request<AdvanceResult>("POST", `${base(id)}/advance`);
+    return { phase: "building" };
   },
 
   place(id, input) {

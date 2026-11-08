@@ -49,6 +49,18 @@ def make_tile(tile_type: TileType, anchor: list[int], cells: list[list[int]] | N
     )
 
 
+def find_bridge_anchor(parcel: Parcel, orientation: str = "horizontal"):
+    for r, row in enumerate(parcel.terrain):
+        for c, terrain in enumerate(row):
+            if terrain is not Terrain.BANK:
+                continue
+            try:
+                return [r, c], bridge_cells(parcel, [r, c], orientation)
+            except ValueError:
+                pass
+    raise AssertionError("测试地块没有合法桥位")
+
+
 def traffic_of(parcel: Parcel, tiles: list[Tile]):
     stats = residential_stats(parcel, tiles, CONFIG)
     return compute_traffic(parcel, tiles, stats, CONFIG)
@@ -106,13 +118,23 @@ class TestRiverCrossing:
 
     def test_bridge_cells_expansion(self):
         parcel = make_parcel(river_col=24)
-        assert bridge_cells(parcel, [10, 24]) == [[10, 24]]
-        # 非河道锚点 → ValueError（会话层转 invalid_placement）
-        try:
-            bridge_cells(parcel, [10, 10])
-            raise AssertionError("应当拒绝")
-        except ValueError:
-            pass
+        parcel.terrain[10][23] = Terrain.BANK
+        parcel.terrain[10][25] = Terrain.BANK
+        assert bridge_cells(parcel, [10, 23], "horizontal") == [
+            [10, 23], [10, 24], [10, 25]
+        ]
+        vertical = make_parcel()
+        vertical.terrain[9][10] = Terrain.BANK
+        vertical.terrain[10][10] = Terrain.RIVER
+        vertical.terrain[11][10] = Terrain.BANK
+        assert bridge_cells(vertical, [9, 10], "vertical") == [[9, 10], [10, 10], [11, 10]]
+        # river/flat 锚点均不合法；只有西侧或北侧 bank 可作为起点。
+        for invalid in ([10, 24], [10, 10]):
+            try:
+                bridge_cells(parcel, invalid, "horizontal")
+                raise AssertionError("应当拒绝")
+            except ValueError:
+                pass
 
 
 class TestBridgePlacement:
@@ -120,15 +142,10 @@ class TestBridgePlacement:
         parcel = generate_parcel(882314, CONFIG)
         session = GameSession("b", parcel=parcel, config=CONFIG)
         session.advance()
-        river = next(
-            (r, c)
-            for r, row in enumerate(parcel.terrain)
-            for c, t in enumerate(row)
-            if t is Terrain.RIVER
+        anchor, expected = find_bridge_anchor(parcel)
+        tile, metrics, _, funds = session.place(
+            TileType.UTIL_BRIDGE, anchor, orientation="horizontal"
         )
-        tile, metrics, _, funds = session.place(TileType.UTIL_BRIDGE, list(river))
-        r, c = river
-        expected = bridge_cells(parcel, [r, c])
         assert tile.cells == expected
         n = len(expected)
         assert funds == 5_000_000 - 200_000 * n
@@ -146,7 +163,7 @@ class TestBridgePlacement:
             if t is Terrain.FLAT
         )
         try:
-            session.place(TileType.UTIL_BRIDGE, list(flat))
+            session.place(TileType.UTIL_BRIDGE, list(flat), orientation="horizontal")
             raise AssertionError("应当拒绝")
         except GameError as exc:
             assert exc.code.value == "invalid_placement"

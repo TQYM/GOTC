@@ -18,12 +18,12 @@
 
 | 片区 | 范围 | 网格 | 特色 | 建议 |
 |---|---|---|---|---|
-| **朝阳 CBD–通惠河**（默认） | 约 2.4×2.4km：西起东大桥、东至四惠、北抵朝阳路、南临通惠河 | 48×48 @50m | 超高层集群 + 河道 + 居住混合，通勤/地价戏剧性强 | 首发 |
+| **朝阳 CBD–通惠河**（默认） | 48 格裁剪出的约 2.4×2.4km CBD 核心；实际 WGS84 bbox `[116.437,39.900,116.465,39.9216]`，包含中国尊、央视、国贸与通惠河部分河段 | 48×48 @50m | 超高层集群 + 河道 + 居住混合，通勤/地价戏剧性强 | 首发 |
 | 回龙观 | 约 3.2×3.2km | 64×64 @50m | 睡城通勤难题，治理叙事强 | 备选第二图 |
 | 中关村西区 | 约 2.4×2.4km | 48×48 @50m | 高校/科技园混合 | 备选 |
 
 - 网格规则不变（坐标 `r,c`、anchor、占地形状），只是地形从「生成」变「加载」。
-- 多片区 = 开局选择界面加一栏；每片区一个数据包目录。首发只做 1 个，第二个片区是砍单首选。
+- 多片区 = 开局选择界面加一栏；每片区一个数据包目录。首发只做 1 个，第二个片区是砍单首选。固定 48×48 的首发包不宣称覆盖东大桥至四惠的完整直线范围，验收以实际 bbox 为准。
 - 网格分辨率不做 25m（建筑细节由矢量层负责，网格只服务数值；提高分辨率会让 sim 重算成本翻倍且对玩法无收益）。
 
 ## 3. 数据源与许可（已联网核实，2026-11）
@@ -57,6 +57,7 @@
 | `buildings.json` | 既有建筑轮廓（投影后米制坐标）+ 高度/层数/类别，按 8×8 格分片 | <2MB |
 | `network.json` | 道路/地铁中心线（3D 渲染与 sim 道路图共用） | <300KB |
 | `terrain.bin`（可选） | DEM 高程网格 Float32 | <40KB |
+| `source.json` / `LICENSE.txt` | 原始摘要、配置绑定版本、统计与 ODbL 署名 | 必配 |
 
 **许可落点**：`data/parcels/*/LICENSE.txt` 每片区一份（OSM 署名 + 衍生数据 ODbL 共享声明）；前端「关于」弹层展示同样署名。
 
@@ -74,9 +75,9 @@ OSM 要素 → 地形/格类型映射（在 01 §1 六值基础上扩展）：
 | `landuse=industrial` 现状 | `occupied`（既有厂房） | 可 redevelop（首钢式更新叙事） |
 | 其余空地/低效用地 | `flat` | 自由建造 |
 
-**redevelop（更新改造）**：对 `occupied` 格的新操作——支付现状建筑「拆迁成本」（按建筑面积×片区地价系数）后变为 `flat`，人口/岗位按现状估算瞬时扣除，幸福度短期 -5（搬迁阵痛），随后可自由放置。这是真实片区模式的核心决策张力：每一寸新建设都要付真实代价。`redevelop` 走与 place/remove 相同的契约形状（新操作类型，契约只增不改）。
+**redevelop（更新改造）**：对 `occupied` 格的新操作——支付现状建筑「拆迁成本」（按建筑面积×片区地价系数）后变为 `flat`，人口/岗位及现状维护费按资产瞬时扣除，幸福度附加 -5 至第 3 个年度（含操作当年），随后可自由放置。这是真实片区模式的核心决策张力：每一寸新建设都要付真实代价。`redevelop` 走与 place/remove 相同的契约形状（新操作类型，契约只增不改）。
 
-**既有建筑产出**：`occupied` 格按建筑类别估算现状人口/岗位计入初始指标（住宅按层数×基底×人均面积，商业按建筑面积），保证开局指标是「一个真实运转的城区」而非零。
+**既有建筑产出**：`occupied` 格按建筑类别估算现状人口/岗位计入初始指标（住宅按层数×基底×人均面积，商业按建筑面积），保证开局指标是「一个真实运转的城区」而非零。现状人口/岗位参与职住比与税收；维护费按建筑面积 × `existing_upkeep_yuan_per_m2` 计算并进入年度财政。所有系数在 `parcels.yaml`，沙盒默认加项为 0。
 
 ## 6. 3D 渲染规格（前端）
 
@@ -99,7 +100,7 @@ OSM 要素 → 地形/格类型映射（在 01 §1 六值基础上扩展）：
 |---|---|---|
 | 引擎 | Three.js + @react-three/fiber + @react-three/drei | React 生态与 Next.js 契合；drei 提供 OrbitControls/实例化工具 |
 | 相机 | 透视相机 + OrbitControls（旋转/缩放/平移；触屏单指旋转、双指缩放平移） | 09 §5 触屏映射延续 |
-| 坐标 | 与 EPSG:32650 对齐的米制局部坐标，片区中心为原点 | 避免大浮点误差 |
+| 坐标 | EPSG:32650 投影后减去 bbox 西南角投影原点，得到局部米制坐标 | 避免大浮点误差；`origin` 记录该 UTM 原点 |
 | 光照 | 1 方向光 + 半球环境光；阴影桌面开、移动关（假 AO 贴地色块代替） | 性能 |
 | 拾取 | Raycaster 对地面网格平面求交 → 换算 r,c | 拖拽/点选放置的 3D 等价物 |
 
@@ -133,18 +134,18 @@ OSM 要素 → 地形/格类型映射（在 01 §1 六值基础上扩展）：
 - 首屏数据包加载 ≤3s（本地服务）； buildings 分片按视野懒加载。
 - 四端 WebGL2：macOS Safari/Chrome、Windows Chrome/Edge、Android System WebView、iOS WKWebView（15+）均支持，写进 09 §5 验收。
 
-## 7. 契约与后端影响（只增不改，版本 v1.1）
+## 7. 契约与后端影响（saves v2）
 
 | 变更 | 内容 |
 |---|---|
-| Parcel 形状 | 新增 `parcel_id`、`district_name`、`bbox`、`buildings_url`、`network_url`；`terrain` 枚举新增 `occupied`；随机 seed 模式保留（`parcel_id="sandbox"`） |
-| 建局端点 | `POST /api/sessions` 请求新增可选 `parcel_id`（默认 `beijing_cbd`）；响应 Parcel 带上述字段 |
+| Parcel 形状 | 包含 `parcel_id/district_name/crs/origin/bbox/buildings_url/network_url`；`terrain` 含 `occupied`；随机 seed 模式保留（`parcel_id="sandbox"`） |
+| 建局端点 | `POST /api/saves` 请求含可选 `parcel_id`（默认 `beijing_cbd`）；响应为完整 SaveState，旧 `/api/sessions` 不存在 |
 | 新操作 | `redevelop`（place/remove 同族，请求含 anchor，响应含 MetricsDiff + 拆迁成本明细） |
 | 初始指标 | 含既有建筑产出（§5），建局即非零 |
 | 静态资源 | 后端 `/static/parcels/<parcel_id>/...` 直出数据包文件（本地服务，无 CDN） |
-| 不变 | 14 指标、sim 公式、SSE 事件表、结局判定、10 号文档的存档/同步体系 |
+| 不变 | 14 指标与玩家 tile 的 sim 公式、saves v2 SSE 事件表、可重复城市体检报告、10 号文档的存档/同步体系 |
 
-后端 generator.py 保留（沙盒模式），新增 `app/sim/parcel_loader.py`（读数据包建 Parcel）；GameSession 建局按 `parcel_id` 二选一。放置校验表加 `occupied` 行（默认拒绝，redevelop 例外）。
+后端 generator.py 保留（沙盒模式），`app/sim/parcel_loader.py` 按 `parcel_id` 加载 CityState 与 ExistingAsset；缺失真实包直接报错，不静默回退。放置校验拒绝 `occupied`，只有 redevelop 例外。
 
 ## 8. PR 卡变更（08 号文档同步）
 

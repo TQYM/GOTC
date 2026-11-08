@@ -32,6 +32,10 @@ def recompute(
     at_phase: Phase = Phase.BUILD,
     stats_override: list[ResStat] | None = None,
     modifier: EventModifier | None = None,
+    existing_population: int = 0,
+    existing_jobs: int = 0,
+    existing_upkeep: int = 0,
+    happiness_adjustment: int = 0,
 ) -> Metrics:
     """全量重算（03 §1：48×48 全量 <10ms，不做增量）。"""
     mod = modifier or EventModifier()
@@ -40,8 +44,8 @@ def recompute(
         if stats_override is not None
         else residential_stats(parcel, tiles, config)
     )
-    population = population_of(stats)
-    jobs = jobs_of(tiles, config)
+    population = population_of(stats) + existing_population
+    jobs = jobs_of(tiles, config) + existing_jobs
     land_price = round(land_price_index(parcel, tiles, stats, config) + mod.land_bonus, 1)
     traffic = compute_traffic(parcel, tiles, stats, config)
     green = green_ratio(parcel, tiles)
@@ -60,7 +64,7 @@ def recompute(
         coverage_edu=edu,
         coverage_med=med,
         res_high_share=res_high / res_total if res_total else 0.0,
-        event_delta=mod.happiness_delta,
+        event_delta=mod.happiness_delta + happiness_adjustment,
     )
     return Metrics(
         at_year=at_year,
@@ -75,8 +79,14 @@ def recompute(
         congestion=traffic.congestion,
         pollution=pollution,
         happiness=happiness,
-        tax_income=tax_income(stats, jobs, land_price, job_mult=mod.job_tax_mult),
-        upkeep=round(upkeep_of(tiles) * mod.upkeep_mult),
+        tax_income=tax_income(
+            stats,
+            jobs,
+            land_price,
+            job_mult=mod.job_tax_mult,
+            additional_population=existing_population,
+        ),
+        upkeep=round((upkeep_of(tiles) + existing_upkeep) * mod.upkeep_mult),
         coverage_edu=edu,
         coverage_med=med,
     )

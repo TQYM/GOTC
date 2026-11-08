@@ -30,8 +30,15 @@ export type TileType =
   | "trans_road"
   | "util_bridge";
 
-/** 02 §5 阶段 */
-export type Phase = "briefing" | "build" | "polish" | "locked" | "report";
+/** 02 §5：saves v2 持久化只用 briefing/building；projecting/report 为本端视图，其余为 v1 兼容。 */
+export type Phase =
+  | "briefing"
+  | "building"
+  | "projecting"
+  | "build"
+  | "polish"
+  | "locked"
+  | "report";
 
 /** 01 §7 结局 */
 export type Ending =
@@ -69,9 +76,12 @@ export interface Parcel {
   seed: number;
   parcel_id?: string;
   district_name?: string;
-  bbox?: number[];
-  buildings_url?: string;
-  network_url?: string;
+  data_version?: string;
+  crs?: string;
+  origin?: [number, number] | null;
+  bbox?: number[] | null;
+  buildings_url?: string | null;
+  network_url?: string | null;
 }
 
 /** 02 §2.3：仅 util_bridge 携带 */

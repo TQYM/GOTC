@@ -1,10 +1,4 @@
-/**
- * 城市接口抽象：前端只依赖这一层，后端从 v1 sessions 迁到 v2 saves（10 §5）时只换适配器。
- *
- * - 阶段统一为不限时 4 态（10 §3）：briefing / building / projecting / report；
- * - 前端不读取任何倒计时字段（`time_left_sec` 已废弃，05 §3.4）；
- * - 城市年份 `city_year`：v1 后端用 metrics.at_year 承载，v2 直接下发。
- */
+/** 前端内部城市接口；真实默认实现为 saves v2，v1/mock 仅保留开发兼容。 */
 import type {
   BridgeOrientation,
   Cell,
@@ -22,36 +16,39 @@ import type {
   Tile,
   TileType,
 } from "@/lib/contract";
-import type { PhaseV2 } from "@/lib/contractV2";
+import type {
+  OperationResult,
+  PhaseV2,
+  ReportResult,
+  SharedPhase,
+} from "@/lib/contractV2";
 
 export type GamePhase = PhaseV2;
 
-/** v1 五阶段 → 不限时 4 态（build/polish 合并为 building，locked 即推演中） */
 export function toGamePhase(p: Phase | PhaseV2): GamePhase {
   switch (p) {
-    case "briefing":
-      return "briefing";
-    case "build":
-    case "polish":
-    case "building":
-      return "building";
-    case "locked":
-    case "projecting":
-      return "projecting";
-    case "report":
-      return "report";
+    case "briefing": return "briefing";
+    case "build": case "polish": case "building": return "building";
+    case "locked": case "projecting": return "projecting";
+    case "report": return "report";
   }
 }
 
 export interface CitySnapshot {
   id: string;
+  name?: string;
   parcel: Parcel;
   tiles: Tile[];
+  redevelopedAssetIds: string[];
   metrics: Metrics;
   phase: GamePhase;
   cityYear: number;
+  lastSeq: number;
   projection: ProjectionYear[];
   projectionPublishedYear: number;
+  projectionId?: string;
+  projectionBaseYear?: number;
+  projectionBaseSeq?: number;
   scores: Scores | null;
   ending: Ending | null;
   report: Report | null;
@@ -64,16 +61,44 @@ export interface PlaceInput {
   orientation?: BridgeOrientation;
 }
 
-/** 后端是否提供该能力（v1 后端没有手动快进/只读推演/单独报告） */
+export interface CreateCityInput {
+  name?: string;
+  parcelId?: "beijing_cbd" | "sandbox";
+  seed?: number;
+}
+
 export interface Capabilities {
   advanceYear: boolean;
   project: boolean;
   report: boolean;
-  /** v1 的「推演」= finalize，会锁定本局 */
   projectLocksCity: boolean;
+  redevelop?: boolean;
+  reportHistory?: boolean;
+  mentor?: boolean;
 }
 
-/** 推送事件（SSE 或 mock 内部广播），id 为单调序号 */
+export interface StreamEventMap {
+  tick: SseEventMap["tick"];
+  phase_change: {
+    phase: Phase | PhaseV2;
+    city_year?: number;
+    time_left_sec?: number;
+  };
+  city_year: {
+    city_year: number;
+    metrics_diff?: MetricsDiff;
+    events?: string[];
+  };
+  snapshot: CitySnapshot;
+  op_applied: OperationResult;
+  news: SseEventMap["news"];
+  citizen: SseEventMap["citizen"];
+  mentor: SseEventMap["mentor"];
+  projection_step: SseEventMap["projection_step"];
+  report_ready: SseEventMap["report_ready"] | ReportResult;
+  error: SseEventMap["error"];
+}
+
 export type StreamEvent = {
   [K in keyof StreamEventMap]: {
     id: number | null;
@@ -82,50 +107,46 @@ export type StreamEvent = {
   };
 }[keyof StreamEventMap];
 
-/** v1 事件表 + v2 新增事件（10 §5） */
-export interface StreamEventMap extends SseEventMap {
-  city_year: {
-    city_year: number;
-    metrics_diff?: MetricsDiff;
-    events?: string[];
-  };
-}
-
 export type ConnState = "connecting" | "open" | "down";
-
 export interface StreamHandlers {
   onEvent: (e: StreamEvent) => void;
   onConn: (s: ConnState, downSinceMs: number | null) => void;
 }
 
 export interface CityApi {
-  readonly kind: "v1" | "mock";
+  readonly kind: "v2" | "v1" | "mock";
   readonly capabilities: Capabilities;
-  create(seed?: number): Promise<{ id: string }>;
+  create(input?: number | CreateCityInput): Promise<{ id: string }>;
   load(id: string): Promise<CitySnapshot>;
-  /** briefing → building（「开始规划」） */
-  startPlanning(id: string): Promise<{ phase: GamePhase }>;
+  startPlanning(id: string): Promise<{ phase: SharedPhase; snapshot?: CitySnapshot }>;
   place(id: string, input: PlaceInput): Promise<PlaceResult>;
   remove(id: string, tileId: string): Promise<PlaceResult>;
-  /** 快进一年（10 §3 advance） */
-  advanceYear(
-    id: string,
-  ): Promise<{ cityYear: number; metrics: Metrics; phase: GamePhase }>;
-  /** 未来推演 10 年 */
+  redevelop?(id: string, anchor: Cell): Promise<OperationResult>;
+  advanceYear(id: string): Promise<{
+    cityYear: number;
+    metrics: Metrics;
+    phase: SharedPhase;
+    operation?: OperationResult;
+  }>;
   project(id: string): Promise<{
     phase: GamePhase;
     projection: ProjectionYear[];
+    projectionId?: string;
+    baseYear?: number;
+    baseSeq?: number;
     final?: FinalizeResult;
   }>;
-  /** 城市诊断报告 */
   report(id: string): Promise<{
     phase: GamePhase;
     scores: Scores;
     ending: Ending;
     report: Report;
     cityName: string | null;
+    result?: ReportResult;
   }>;
-  /** 关闭报告 / 结束推演回到建设（v2 语义；v1 不支持） */
+  reports?(id: string): Promise<ReportResult[]>;
+  mentor?(id: string): Promise<void>;
+  /** v1 兼容；v2 只切本端视图，不发 REST。 */
   backToBuilding(id: string): Promise<{ phase: GamePhase }>;
   subscribe(id: string, handlers: StreamHandlers): () => void;
 }

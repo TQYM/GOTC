@@ -14,6 +14,7 @@ class Terrain(StrEnum):
     BANK = "bank"
     FOREST = "forest"
     ROAD_INHERITED = "road_inherited"
+    OCCUPIED = "occupied"
 
 
 class ParcelConstraints(BaseModel):
@@ -28,12 +29,20 @@ def _check_coord(coord: list[int]) -> bool:
 
 
 class Parcel(BaseModel):
+    parcel_id: str = "sandbox"
+    district_name: str = "自定义沙盒"
+    data_version: str = "sandbox-v1"
     size: int = Field(default=48, ge=1)
     cell_size_m: int = Field(default=50, ge=1)
+    crs: str = "LOCAL"
+    origin: list[float] | None = None
+    bbox: list[float] | None = None
     terrain: list[list[Terrain]]
     inherited_road: list[list[int]]
     constraints: ParcelConstraints
     seed: int
+    buildings_url: str | None = None
+    network_url: str | None = None
 
     @model_validator(mode="after")
     def _check_geometry(self) -> "Parcel":

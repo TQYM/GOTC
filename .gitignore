@@ -19,8 +19,8 @@ Icon?
 secrets.*
 
 # ==================== Node / Next.js ====================
-node_modules/
-.next/
+node_modules
+.next
 out/
 dist/
 build/
@@ -35,7 +35,7 @@ __pycache__/
 *$py.class
 *.egg-info/
 .eggs/
-.venv/
+.venv
 venv/
 env/
 .pytest_cache/
@@ -44,6 +44,15 @@ env/
 .coverage
 htmlcov/
 .ipynb_checkpoints
+
+# ==================== SQLite 运行时存档与备份 ====================
+/data/*.db
+/data/*.db-journal
+/data/*.db-shm
+/data/*.db-wal
+/backups/
+*.sqlite
+*.sqlite3
 
 # ==================== 日志与临时文件 ====================
 *.log

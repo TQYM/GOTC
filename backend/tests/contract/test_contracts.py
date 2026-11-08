@@ -156,8 +156,11 @@ class TestMetrics:
         assert diff.after is None
         assert set(diff.delta) == {"population", "happiness", "congestion"}
 
-    def test_all_5_phases_exist(self):
-        assert {p.value for p in Phase} == {"briefing", "build", "polish", "locked", "report"}
+    def test_v2_and_legacy_internal_phases_coexist(self):
+        # 旧值只供未挂载的 sim/narrator 内部模型回归；saves API 只持久化 briefing/building。
+        assert {p.value for p in Phase} == {
+            "briefing", "build", "building", "polish", "locked", "report", "projecting"
+        }
 
 
 class TestErrorProtocol:
