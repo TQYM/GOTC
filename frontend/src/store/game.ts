@@ -34,6 +34,7 @@ import {
 import { humanizeError, yuan } from "@/lib/api/humanize";
 import { TILE_SPECS } from "@/lib/catalog";
 import { checkPlacement, estimateRefund, occupiedKey } from "@/lib/validate";
+import { withBase } from "@/lib/api/base";
 
 export type Tool =
   | { kind: "select" }
@@ -678,7 +679,7 @@ export const useGame = create<GameState>()((set, get) => {
       const url = parcel?.buildings_url;
       if (!url) return;
       try {
-        const res = await fetch(url);
+        const res = await fetch(withBase(url));
         if (!res.ok) return;
         const file = (await res.json()) as BuildingsFile;
         const map: Record<string, ExistingAsset> = {};

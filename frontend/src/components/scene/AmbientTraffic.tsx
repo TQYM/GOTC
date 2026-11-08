@@ -16,6 +16,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Tile } from "@/lib/contract";
 import type { NetworkFile } from "@saves/lib/types";
+import { withBase } from "@/lib/api/base";
 
 interface Props {
   worldSize: number;
@@ -184,7 +185,7 @@ export default function AmbientTraffic({
   useEffect(() => {
     if (!networkUrl) return;
     const controller = new AbortController();
-    void fetch(networkUrl, { signal: controller.signal })
+    void fetch(withBase(networkUrl), { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : null))
       .then((data: NetworkFile | null) => {
         if (!controller.signal.aborted && data) setNetwork(data);

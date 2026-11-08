@@ -9,6 +9,9 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -45,6 +48,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1024)  # 数据包 6.8MB → 压缩后约 1MB，小带宽链路必须开
 app.include_router(saves_router)
 app.mount(
     "/static/parcels",
@@ -117,3 +121,21 @@ async def healthz() -> dict[str, object]:
         "saves": database["saves"],
         "database": database,
     }
+
+
+class SPAStaticFiles(StaticFiles):
+    """前端静态包挂到 /：找不到的路径回落到 index.html，交给前端路由。"""
+
+    async def get_response(self, path: str, scope):  # type: ignore[override]
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise
+
+
+# 前后端合一：同一个端口既出 API 又出页面（frontend/out 存在时）
+_WEB_DIR = Path(settings.parcel_data_dir).parents[1] / "frontend" / "out"
+if _WEB_DIR.is_dir():
+    app.mount("/", SPAStaticFiles(directory=_WEB_DIR, html=True), name="web")

@@ -52,7 +52,9 @@ const KEY = (id: string) => `city20.mock.${id}`;
 /** 离线包（HTML / APK）：没有后端，直接用真实北京东西朝海数据包当棋盘 */
 /** 真·离线（没有后端地址）：才用浏览器内 mock。配了 API_BASE 的静态包照样连后端 */
 export const OFFLINE =
-  process.env.NEXT_PUBLIC_OFFLINE === "1" && !process.env.NEXT_PUBLIC_API_BASE;
+  process.env.NEXT_PUBLIC_OFFLINE === "1" &&
+  process.env.NEXT_PUBLIC_API_MODE !== "real" &&
+  !process.env.NEXT_PUBLIC_API_BASE;
 
 const CORE_PARCEL = CORE.parcel as unknown as Parcel;
 const BASELINE = CORE.baseline;

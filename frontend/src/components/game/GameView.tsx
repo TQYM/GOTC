@@ -10,6 +10,7 @@ import Link from "next/link";
  */
 import dynamic from "next/dynamic";
 import { isNativeApp } from "@/lib/native";
+import { withBase } from "@/lib/api/base";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
@@ -143,7 +144,7 @@ export default function GameView({
   const withWorldMap = !parcel || parcel.parcel_id !== "beijing_core";
   const parcelLabelsUrl =
     !withWorldMap && parcel
-      ? `/static/parcels/${parcel.parcel_id}/labels.json`
+      ? withBase(`/static/parcels/${parcel.parcel_id}/labels.json`)
       : null;
 
   // 左上角标题：选中建筑 > 视野所在的区 > 城市名
