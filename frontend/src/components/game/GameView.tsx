@@ -41,6 +41,7 @@ import BuildDrawer from "@/components/hud/BuildDrawer";
 import InspectorPanel from "@/components/hud/InspectorPanel";
 import NewsTicker from "@/components/hud/NewsTicker";
 import TopBar from "@/components/hud/TopBar";
+import Bgm from "@/components/game/Bgm";
 import { PixelIcon } from "@/components/ui/PixelSprite";
 
 const ASSET_FALLBACK_NAME: Record<string, string> = {
@@ -336,6 +337,7 @@ export default function GameView({
         data-testid="game-view"
         data-phase={phase}
       >
+        <Bgm />
         {/* 3D 沙盘：全屏铺底 */}
         <div ref={sceneBox} className="absolute inset-0">
           {parcel ? (

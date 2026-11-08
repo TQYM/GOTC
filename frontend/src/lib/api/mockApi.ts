@@ -19,6 +19,7 @@ import type {
 } from "@/lib/contract";
 import { TILE_SPECS } from "@/lib/catalog";
 import { MOCK_SESSION } from "@/lib/mock";
+import CORE from "@/lib/mock/beijing-core.json";
 import { checkPlacement, estimateRefund, occupiedKey } from "@/lib/validate";
 import { ApiError } from "./http";
 import type {
@@ -47,7 +48,17 @@ interface MockCity {
 }
 
 const KEY = (id: string) => `city20.mock.${id}`;
-const parcel: Parcel = MOCK_SESSION.parcel;
+
+/** 离线包（HTML / APK）：没有后端，直接用真实北京东西朝海数据包当棋盘 */
+export const OFFLINE = process.env.NEXT_PUBLIC_OFFLINE === "1";
+
+const CORE_PARCEL = CORE.parcel as unknown as Parcel;
+const BASELINE = CORE.baseline;
+
+const parcel: Parcel = OFFLINE ? CORE_PARCEL : MOCK_SESSION.parcel;
+const BASE_POP = OFFLINE ? BASELINE.population : 0;
+const BASE_JOBS = OFFLINE ? BASELINE.jobs : 0;
+const BASE_GREEN = OFFLINE ? BASELINE.green_ratio : 0;
 const subscribers = new Map<string, Set<StreamHandlers>>();
 
 /** phase_change 载荷：v1 契约仍要求 time_left_sec 字段，mock 固定填 0，前端从不读取 */
@@ -95,13 +106,16 @@ function compute(
   const sum = (m: Partial<Record<Tile["type"], number>>) =>
     tiles.reduce((a, t) => a + (m[t.type] ?? 0), 0);
   const count = (pred: (t: Tile) => boolean) => tiles.filter(pred).length;
-  const population = sum(CAPACITY);
-  const jobs = sum(JOBS);
+  const population = sum(CAPACITY) + BASE_POP;
+  const jobs = sum(JOBS) + BASE_JOBS;
   const greenCells = tiles
     .filter((t) => TILE_SPECS[t.type].category === "green")
     .reduce((a, t) => a + t.cells.length, 0);
   const builtCells = tiles.reduce((a, t) => a + t.cells.length, 0);
-  const green_ratio = builtCells ? +(greenCells / builtCells).toFixed(3) : 0;
+  const green_ratio = Math.max(
+    builtCells ? +(greenCells / builtCells).toFixed(3) : 0,
+    BASE_GREEN,
+  );
   const pollution = +Math.min(
     1,
     count((t) => t.type === "ind_heavy") * 0.12 +
@@ -110,24 +124,29 @@ function compute(
   const roads =
     count((t) => t.type === "trans_road") +
     count((t) => t.type === "trans_metro") * 8;
-  const congestion = population
-    ? +Math.min(1.5, population / (4000 + roads * 600)).toFixed(3)
-    : 0;
+  // 离线包带着 929 万既有人口，直接套沙盒公式会瞬间爆表：用既有路网的基线拥堵
+  const congestion = OFFLINE
+    ? +Math.max(0.12, Math.min(1.2, 0.52 - roads * 0.012)).toFixed(3)
+    : population
+      ? +Math.min(1.5, population / (4000 + roads * 600)).toFixed(3)
+      : 0;
   const avg_commute = population
     ? Math.round(
-        18 + congestion * 40 - count((t) => t.type === "trans_metro") * 3,
+        (OFFLINE ? 26 : 18) +
+          congestion * 40 -
+          count((t) => t.type === "trans_metro") * 3,
       )
     : 0;
   const coverage_edu = population
-    ? +Math.min(
-        1,
-        (count((t) => t.type === "edu_school") * 3000) / population,
+    ? +Math.max(
+        OFFLINE ? BASELINE.coverage_edu : 0,
+        Math.min(1, (count((t) => t.type === "edu_school") * 3000) / population),
       ).toFixed(3)
     : 0;
   const coverage_med = population
-    ? +Math.min(
-        1,
-        (count((t) => t.type === "med_clinic") * 5000) / population,
+    ? +Math.max(
+        OFFLINE ? BASELINE.coverage_med : 0,
+        Math.min(1, (count((t) => t.type === "med_clinic") * 5000) / population),
       ).toFixed(3)
     : 0;
   const happiness = Math.round(

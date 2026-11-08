@@ -20,8 +20,7 @@ function readStored(): PixelScale | null {
 
 /** 默认：桌面 3×；触屏 2×（同时是性能优化，片元数降到约 1/4） */
 export function defaultPixelScale(): PixelScale {
-  if (typeof window === "undefined") return 3;
-  return window.matchMedia?.("(pointer: coarse)").matches ? 2 : 3;
+  return 0;
 }
 
 interface PrefsState {

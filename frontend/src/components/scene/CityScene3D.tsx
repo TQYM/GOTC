@@ -345,7 +345,9 @@ export default function CityScene3D({
   const prefScale = usePrefs((s) => s.pixelScale);
   const hydratePrefs = usePrefs((s) => s.hydrate);
   useEffect(() => hydratePrefs(), [hydratePrefs]);
-  const pixel = pixelScale ?? prefScale ?? 0;
+  // 像素化在本期下线：改用平滑渲染（用户 m03363）。保留开关代码便于回退。
+  const PIXEL_ART_ENABLED = false;
+  const pixel = PIXEL_ART_ENABLED ? (pixelScale ?? prefScale ?? 0) : 0;
   const rightDown = useRef<[number, number] | null>(null);
   const coarse = useCoarsePointer();
   const perf = usePerfFlag();
@@ -413,10 +415,10 @@ export default function CityScene3D({
     [onCellClick],
   );
 
-  // 初始机位：只框住东西朝海（约 26km 见方），不是整块 48km 棋盘，
-  // 这样开局视野里没有棋盘边缘，也看不到虚空。
+  // 初始机位：只框住当前区（视野约 18km），不是整块 48km 棋盘；
+  // 距离落在 maxDistance 之内，否则 OrbitControls 会把相机硬拉近、地形挤出摩尔纹。
   const camPos = useMemo<[number, number, number]>(
-    () => [boardExtent * 0.32, boardExtent * 0.68, boardExtent * 0.50],
+    () => [boardExtent * 0.21, boardExtent * 0.44, boardExtent * 0.33],
     [boardExtent],
   );
   const home = useMemo<[number, number, number]>(

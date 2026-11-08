@@ -9,7 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const FRONTEND = join(dirname(fileURLToPath(import.meta.url)), "..");
-const PARCELS = ["beijing_full"];
+const PARCELS = ["beijing_full", "beijing_core"];
 const FILES = [
   "parcel.json",
   "buildings.json",
