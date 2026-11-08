@@ -135,7 +135,7 @@ export default function SandboxView() {
         </div>
       </section>
 
-      <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto rounded-lg border border-line bg-bg-elev p-4 text-sm lg:w-72">
+      <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto border border-line bg-bg-elev p-4 text-sm lg:w-72">
         <div>
           <h1 className="text-base font-semibold">
             3D 沙盘预览 · seed {parcel.seed}
@@ -166,7 +166,7 @@ export default function SandboxView() {
           <select
             value={tool}
             onChange={(e) => setTool(e.target.value as TileType | "")}
-            className="rounded border border-line bg-bg px-2 py-1"
+            className="border border-line bg-bg px-2 py-1"
             data-testid="tool-select"
           >
             <option value="">不预览</option>
@@ -181,7 +181,7 @@ export default function SandboxView() {
         <button
           type="button"
           onClick={() => setResetView((n) => n + 1)}
-          className="self-start rounded border border-line px-2 py-1 hover:bg-line"
+          className="self-start border border-line px-2 py-1 hover:bg-line"
         >
           回到全景（Home）
         </button>
@@ -257,7 +257,7 @@ function Legend({
         {items.map(([label, color]) => (
           <li key={label} className="flex items-center gap-2">
             <span
-              className="inline-block h-3 w-3 rounded-sm"
+              className="inline-block h-3 w-3"
               style={{ background: color }}
             />
             {label}

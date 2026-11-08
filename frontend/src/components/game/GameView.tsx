@@ -40,6 +40,7 @@ import BuildDrawer from "@/components/hud/BuildDrawer";
 import InspectorPanel from "@/components/hud/InspectorPanel";
 import NewsTicker from "@/components/hud/NewsTicker";
 import TopBar from "@/components/hud/TopBar";
+import { PixelIcon } from "@/components/ui/PixelSprite";
 
 const CityScene3D = dynamic(() => import("@/components/scene/CityScene3D"), {
   ssr: false,
@@ -223,7 +224,7 @@ export default function GameView({
           <p className="text-lg font-semibold">{loadError}</p>
           <Link
             href="/"
-            className="mt-3 inline-block rounded-full bg-[var(--wb-gold)] px-5 py-2 font-bold text-[#1c1610]"
+            className="px-action px-action-primary mt-4"
           >
             回首页
           </Link>
@@ -249,7 +250,7 @@ export default function GameView({
       onDragCancel={() => setDragType(null)}
     >
       <main
-        className="relative h-dvh w-full overflow-hidden bg-[#cfe6f2]"
+        className="relative h-dvh w-full overflow-hidden bg-[var(--px-sky)]"
         data-testid="game-view"
         data-phase={phase}
       >
@@ -307,12 +308,11 @@ export default function GameView({
 
         {/* HUD 层：不拦截场景操作，只有具体控件接收事件 */}
         <div className="pointer-events-none absolute inset-0 z-10">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/25 to-transparent" />
 
-          <div className="absolute left-3 top-3">
+          <div className="absolute left-4 top-4">
             <TopBar />
           </div>
-          <div className="absolute left-1/2 top-3 hidden -translate-x-1/2 sm:block">
+          <div className="absolute left-1/2 top-4 hidden -translate-x-1/2 lg:block">
             <ResourcePills />
           </div>
 
@@ -340,12 +340,12 @@ export default function GameView({
             />
           </div>
 
-          <div className="absolute bottom-28 left-3">
+          <div className="absolute bottom-[10.5rem] left-4">
             <NewsTicker onOpenFeed={() => setPanelTab("feed")} />
           </div>
 
           {panelTab && (
-            <div className="absolute bottom-3 right-3 top-[6.5rem] z-20 w-[min(22rem,88vw)]">
+            <div className="absolute bottom-4 right-4 top-[8.5rem] z-20 w-[min(23rem,88vw)]">
               <InspectorPanel
                 tab={panelTab}
                 onTab={setPanelTab}
@@ -358,7 +358,7 @@ export default function GameView({
 
           {placeType === "util_bridge" && (
             <div
-              className="pointer-events-auto absolute bottom-3 right-3 z-20 flex rounded-full border border-[var(--wb-gold-line)] bg-[var(--wb-panel-strong)] p-1 text-xs"
+              className="px-panel pointer-events-auto absolute bottom-5 right-5 z-20 flex gap-2 p-2 text-xs"
               role="group"
               aria-label="桥梁方向"
             >
@@ -369,7 +369,7 @@ export default function GameView({
                   data-testid={`bridge-${value}`}
                   aria-pressed={bridgeOrientation === value}
                   onClick={() => setBridgeOrientation(value)}
-                  className="min-h-9 rounded-full px-3 aria-pressed:bg-[var(--wb-gold)] aria-pressed:font-bold aria-pressed:text-[#1c1610]"
+                  className="px-tab min-h-9"
                 >
                   {value === "horizontal" ? "东西向" : "南北向"}
                 </button>
@@ -379,14 +379,14 @@ export default function GameView({
 
           {tool.kind === "place" && check && !check.ok && (
             <div
-              className="pointer-events-none absolute left-1/2 top-20 z-20 -translate-x-1/2 rounded-full bg-red-600/95 px-4 py-1.5 text-sm font-semibold text-white shadow-lg"
+              className="pointer-events-none absolute left-1/2 top-[8.5rem] z-20 -translate-x-1/2 bg-[var(--px-bad)] px-4 py-2 text-[15px] text-white px-tip"
               data-testid="invalid-reason"
             >
               {check.reason}
             </div>
           )}
           {tool.kind === "place" && check?.ok && check.warning && (
-            <div className="pointer-events-none absolute left-1/2 top-20 z-20 -translate-x-1/2 rounded-full bg-amber-400/95 px-4 py-1.5 text-sm font-semibold text-black shadow-lg">
+            <div className="pointer-events-none absolute left-1/2 top-[8.5rem] z-20 -translate-x-1/2 bg-[var(--px-warn)] px-4 py-2 text-[15px] text-[var(--px-ink)] px-tip">
               {check.warning}
             </div>
           )}
@@ -396,10 +396,13 @@ export default function GameView({
           <TileSheet />
 
           {phase === "briefing" && parcel && (
-            <div className="pointer-events-auto absolute inset-0 z-30 grid place-items-center bg-black/35 p-4">
-              <div className="wb-panel wb-anim-rise max-w-md rounded-2xl p-5" data-testid="briefing">
-                <h2 className="text-lg font-bold">规划简报</h2>
-                <p className="mt-2 text-sm text-[var(--wb-ink-muted)]">
+            <div className="pointer-events-auto absolute inset-0 z-30 grid place-items-center bg-[rgba(42,35,64,0.35)] p-4">
+              <div className="px-panel px-anim-rise max-w-md p-5" data-testid="briefing">
+                <h2 className="flex items-center gap-2.5 text-[22px] font-normal">
+                  <PixelIcon name="report" scale={2} />
+                  规划简报
+                </h2>
+                <p className="mt-3 text-[15px] leading-relaxed text-[var(--px-ink-soft)]">
                   {parcel.constraints.briefing.text}
                 </p>
                 <button
@@ -407,7 +410,7 @@ export default function GameView({
                   data-testid="start-planning"
                   disabled={busy}
                   onClick={() => void startPlanning()}
-                  className="mt-4 min-h-12 rounded-full bg-[var(--wb-gold)] px-6 font-bold text-[#1c1610] disabled:opacity-60 active:scale-[0.98]"
+                  className="px-action px-action-primary mt-5 min-h-12 px-7 text-[17px]"
                 >
                   开始规划
                 </button>
@@ -421,7 +424,7 @@ export default function GameView({
 
       <DragOverlay dropAnimation={null} style={{ pointerEvents: "none" }}>
         {dragType ? (
-          <div className="rounded-xl border border-[var(--wb-gold)] bg-[var(--wb-panel-strong)] px-3 py-2 shadow-xl">
+          <div className="px-panel px-3 py-2">
             <TileCardFace type={dragType} compact />
           </div>
         ) : null}

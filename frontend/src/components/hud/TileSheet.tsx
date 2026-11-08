@@ -12,28 +12,13 @@
  * 关闭：✕ / ESC / 再次点击空白格。
  */
 import { useState } from "react";
-import type { Terrain } from "@/lib/contract";
+import type { Terrain, TileType } from "@/lib/contract";
 import { TILE_ORDER, TILE_SPECS, type TileCategory } from "@/lib/catalog";
 import { yuan } from "@/lib/api/humanize";
 import { tileAt, useGame } from "@/store/game";
 import { CATEGORY_COLORS } from "@/lib/palette";
-
-const TILE_ICON: Record<string, string> = {
-  res_low: "🏡",
-  res_mid: "🏘️",
-  res_high: "🏙️",
-  com_shop: "🛍️",
-  com_cbd: "🏦",
-  ind_light: "🔧",
-  ind_heavy: "🏭",
-  green_park: "🌳",
-  green_plaza: "⛲",
-  edu_school: "🏫",
-  med_clinic: "🏥",
-  trans_metro: "🚇",
-  trans_road: "🛣️",
-  util_bridge: "🌉",
-};
+import { PixelIcon, TileThumb } from "@/components/ui/PixelSprite";
+import type { IconName } from "@/lib/pixelArt";
 
 const CATS: { key: TileCategory | "all"; label: string }[] = [
   { key: "all", label: "全部" },
@@ -46,6 +31,14 @@ const CATS: { key: TileCategory | "all"; label: string }[] = [
   { key: "utility", label: "市政" },
 ];
 
+/** 既有建筑借用最接近的区块缩略图作头像 */
+const ASSET_THUMB: Record<string, TileType> = {
+  residential: "res_mid",
+  workplace: "com_cbd",
+  industrial: "ind_light",
+  civic: "med_clinic",
+};
+
 const ASSET_CATEGORY: Record<string, string> = {
   residential: "住宅",
   workplace: "办公 / 商业",
@@ -53,16 +46,29 @@ const ASSET_CATEGORY: Record<string, string> = {
   civic: "公共服务",
 };
 
-const TERRAIN_INFO: Partial<Record<Terrain, { title: string; hint: string; icon: string }>> = {
-  river: { title: "河道", hint: "水面不可建造；需要跨河请用「跨河桥」。", icon: "🌊" },
-  road_inherited: { title: "既有道路", hint: "道路已占用，不能在上面放置区块。", icon: "🛣️" },
-  hill: { title: "丘陵", hint: "坡地暂不可建造，可先做平整或绕开。", icon: "⛰️" },
+const TERRAIN_INFO: Partial<Record<Terrain, { title: string; hint: string; icon: IconName | null }>> = {
+  river: { title: "河道", hint: "水面不可建造；需要跨河请用「跨河桥」。", icon: "wave" },
+  road_inherited: { title: "既有道路", hint: "道路已占用，不能在上面放置区块。", icon: null },
+  hill: { title: "丘陵", hint: "坡地暂不可建造，可先做平整或绕开。", icon: "hill" },
 };
+
+function ThumbFrame({ type, tint }: { type: TileType; tint: string }) {
+  return (
+    <span
+      className="grid h-[72px] w-16 shrink-0 place-items-center"
+      style={{ background: tint, boxShadow: "0 0 0 3px var(--px-ink), inset 0 -5px 0 rgba(42,35,64,0.12)" }}
+      aria-hidden
+    >
+      <TileThumb type={type} scale={2} />
+    </span>
+  );
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="grid gap-1.5">
-      <h3 className="text-[11px] font-semibold tracking-[0.15em] text-[var(--wb-ink-muted)]">
+      <h3 className="flex items-center gap-2 text-[12px] text-[var(--px-ink-soft)]">
+        <span className="inline-block h-2 w-2 bg-[var(--px-ink)]" aria-hidden />
         {title}
       </h3>
       {children}
@@ -72,9 +78,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 text-sm">
-      <span className="shrink-0 text-[var(--wb-ink-muted)]">{label}</span>
-      <span className="text-right font-medium text-[var(--wb-ink)]">{value}</span>
+    <div className="px-well flex items-baseline justify-between gap-3 px-2.5 py-1.5 text-sm">
+      <span className="shrink-0 text-[var(--px-ink-soft)]">{label}</span>
+      <span className="text-right text-[15px] tabular-nums text-[var(--px-ink)]">{value}</span>
     </div>
   );
 }
@@ -111,16 +117,21 @@ export default function TileSheet() {
 
   return (
     <aside
-      className="wb-panel wb-anim-slide-right pointer-events-auto absolute bottom-3 right-3 top-[6.5rem] z-30 flex w-[min(22rem,88vw)] flex-col overflow-hidden rounded-2xl"
+      className="px-panel px-anim-slide-right pointer-events-auto absolute bottom-4 right-4 top-[8.5rem] z-30 flex w-[min(23rem,88vw)] flex-col overflow-hidden"
       data-testid="tile-sheet"
       aria-label="地块详情"
     >
-      <header className="flex items-start gap-2 border-b border-[var(--wb-gold-line)] px-4 py-3">
+      <span
+        className="block h-1.5 shrink-0"
+        style={{ background: tile ? CATEGORY_COLORS[TILE_SPECS[tile.type].category] : "var(--px-paper-4)" }}
+        aria-hidden
+      />
+      <header className="flex items-start gap-2 border-b-[3px] border-[var(--px-ink)] px-4 py-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] tracking-[0.2em] text-[var(--wb-ink-muted)]">
+          <p className="text-[11px] text-[var(--px-ink-soft)]">
             地块 · 第 {row + 1} 行 第 {col + 1} 列
           </p>
-          <h2 className="mt-0.5 truncate text-base font-bold text-[var(--wb-ink)]">
+          <h2 className="mt-1 truncate text-[22px] font-normal leading-tight text-[var(--px-ink)]">
             {tile
               ? TILE_SPECS[tile.type].name
               : asset
@@ -132,9 +143,9 @@ export default function TileSheet() {
           type="button"
           onClick={close}
           aria-label="关闭详情"
-          className="grid h-8 w-8 place-items-center rounded-full border border-[var(--wb-gold-line)] text-[var(--wb-ink-muted)] transition-transform duration-150 active:scale-90"
+          className="px-icon-btn"
         >
-          ✕
+          <PixelIcon name="close" scale={1} />
         </button>
       </header>
 
@@ -142,12 +153,11 @@ export default function TileSheet() {
         {tile ? (
           <div className="grid gap-3">
             <div className="flex items-center gap-3">
-              <span className="grid h-12 w-12 place-items-center rounded-xl bg-black/25 text-2xl" aria-hidden>
-                {TILE_ICON[tile.type]}
-              </span>
-              <div className="text-sm">
-                <p className="font-semibold text-[var(--wb-ink)]">{TILE_SPECS[tile.type].name}</p>
-                <p className="text-[var(--wb-ink-muted)]">{TILE_SPECS[tile.type].blurb}</p>
+              <ThumbFrame type={tile.type} tint="var(--px-paper-2)" />
+              <div className="grid gap-1.5 text-sm">
+                <span className="px-chip self-start bg-[var(--px-sun)]">我的建筑</span>
+                <p className="text-[16px] text-[var(--px-ink)]">{TILE_SPECS[tile.type].name}</p>
+                <p className="text-[var(--px-ink-soft)]">{TILE_SPECS[tile.type].blurb}</p>
               </div>
             </div>
 
@@ -170,7 +180,7 @@ export default function TileSheet() {
                 data-testid="sheet-remove"
                 disabled={busy || !buildable}
                 onClick={() => requestRemoveAt(selected)}
-                className="min-h-11 w-full rounded-xl border border-red-400/40 px-4 text-sm font-semibold text-red-300 transition-transform duration-150 active:scale-[0.98] disabled:opacity-50"
+                className="px-action px-action-danger w-full"
               >
                 拆除（返还 30%）
               </button>
@@ -179,14 +189,13 @@ export default function TileSheet() {
         ) : asset ? (
           <div className="grid gap-3">
             <div className="flex items-center gap-3">
-              <span className="grid h-12 w-12 place-items-center rounded-xl bg-black/25 text-2xl" aria-hidden>
-                {asset.category === "residential" ? "🏢" : asset.category === "civic" ? "🏛️" : asset.category === "industrial" ? "🏭" : "🏬"}
-              </span>
-              <div className="text-sm">
-                <p className="font-semibold text-[var(--wb-ink)]">
+              <ThumbFrame type={ASSET_THUMB[asset.category] ?? "res_mid"} tint="var(--px-tint-blue)" />
+              <div className="grid gap-1 text-sm">
+                <span className="px-chip self-start bg-[var(--px-paper-2)]">真实建筑</span>
+                <p className="text-[16px] text-[var(--px-ink)]">
                   {asset.name ?? ASSET_CATEGORY[asset.category]}
                 </p>
-                <p className="text-[var(--wb-ink-muted)]">
+                <p className="text-[var(--px-ink-soft)]">
                   真实北京既有建筑 · {asset.height_m.toFixed(0)} m
                   {asset.levels ? ` · 约 ${Math.round(asset.levels)} 层` : ""}
                 </p>
@@ -202,28 +211,28 @@ export default function TileSheet() {
             </Section>
 
             <Section title="更新改造">
-              <p className="text-xs leading-relaxed text-[var(--wb-ink-muted)]">
+              <p className="text-xs leading-relaxed text-[var(--px-ink-soft)]">
                 拆除后土地转为空地，可重新规划。会扣除现状人口与岗位，并让周边居民不满（幸福度 −5）。
               </p>
               {confirmDemolish ? (
                 <div className="grid gap-2">
-                  <p className="text-xs font-semibold text-amber-300">
+                  <p className="px-chip self-start bg-[var(--px-warn)] text-xs">
                     确认拆除？需支付拆迁费 {yuan(asset.demolition_cost)}
                   </p>
-                  <div className="flex gap-2">
+                  <div className="flex gap-4 pt-1">
                     <button
                       type="button"
                       data-testid="sheet-demolish-confirm"
                       disabled={busy || !buildable}
                       onClick={() => void demolishExisting(selected)}
-                      className="min-h-11 flex-1 rounded-xl bg-red-500/90 px-4 text-sm font-bold text-white transition-transform duration-150 active:scale-[0.98] disabled:opacity-50"
+                      className="px-action px-action-danger flex-1"
                     >
                       确认拆除
                     </button>
                     <button
                       type="button"
                       onClick={() => setConfirmDemolish(false)}
-                      className="min-h-11 rounded-xl border border-[var(--wb-gold-line)] px-4 text-sm text-[var(--wb-ink)]"
+                      className="px-action"
                     >
                       取消
                     </button>
@@ -235,7 +244,7 @@ export default function TileSheet() {
                   data-testid="sheet-demolish"
                   disabled={busy || !buildable || (funds !== null && funds < asset.demolition_cost)}
                   onClick={() => setConfirmDemolish(true)}
-                  className="min-h-11 w-full rounded-xl border border-red-400/40 px-4 text-sm font-semibold text-red-300 transition-transform duration-150 active:scale-[0.98] disabled:opacity-40"
+                  className="px-action px-action-danger w-full"
                 >
                   拆除 · 需 {yuan(asset.demolition_cost)}
                 </button>
@@ -244,37 +253,39 @@ export default function TileSheet() {
           </div>
         ) : terrain && TERRAIN_INFO[terrain] ? (
           <div className="grid place-items-center gap-2 py-10 text-center">
-            <span className="text-3xl" aria-hidden>
-              {TERRAIN_INFO[terrain]?.icon}
-            </span>
-            <p className="text-sm font-semibold text-[var(--wb-ink)]">{TERRAIN_INFO[terrain]?.title}</p>
-            <p className="max-w-[16rem] text-xs leading-relaxed text-[var(--wb-ink-muted)]">
+            {TERRAIN_INFO[terrain]?.icon ? (
+              <PixelIcon name={TERRAIN_INFO[terrain]!.icon!} scale={4} />
+            ) : (
+              <TileThumb type="trans_road" scale={3} />
+            )}
+            <p className="text-[18px] text-[var(--px-ink)]">{TERRAIN_INFO[terrain]?.title}</p>
+            <p className="max-w-[16rem] text-xs leading-relaxed text-[var(--px-ink-soft)]">
               {TERRAIN_INFO[terrain]?.hint}
             </p>
           </div>
         ) : (
           <div className="grid gap-3">
-            <p className="text-xs leading-relaxed text-[var(--wb-ink-muted)]">
+            <p className="text-xs leading-relaxed text-[var(--px-ink-soft)]">
               {buildable
                 ? "这块地可以建。选一种区块，点一下即建，可以连续建造。"
                 : "当前阶段只能查看，回到「自由建设」后才能建造。"}
             </p>
 
-            <div className="flex flex-wrap gap-1" role="group" aria-label="建造分类">
+            <div className="flex flex-wrap gap-2.5" role="group" aria-label="建造分类">
               {CATS.map((c) => (
                 <button
                   key={c.key}
                   type="button"
                   aria-pressed={cat === c.key}
                   onClick={() => setCat(c.key)}
-                  className="wb-tab min-h-8 rounded-full px-2.5 text-xs"
+                  className="px-tab"
                 >
                   {c.label}
                 </button>
               ))}
             </div>
 
-            <div className="grid gap-1.5">
+            <div className="grid gap-3 p-0.5">
               {list.map((type) => {
                 const spec = TILE_SPECS[type];
                 const affordable = funds === null || spec.cost <= funds;
@@ -286,20 +297,18 @@ export default function TileSheet() {
                     data-testid={`sheet-build-${type}`}
                     disabled={blocked}
                     onClick={() => void buildAt(type, selected)}
-                    className="flex items-center gap-2.5 rounded-xl border border-[var(--wb-gold-line)] px-2.5 py-2 text-left transition-transform duration-150 active:scale-[0.98] disabled:opacity-40"
+                    className="px-card flex items-center gap-2.5 px-2 py-1.5 text-left"
                   >
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-black/25 text-lg" aria-hidden>
-                      {TILE_ICON[type]}
-                    </span>
+                    <TileThumb type={type} scale={1} />
                     <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1.5 text-sm font-semibold text-[var(--wb-ink)]">
+                      <span className="flex items-center gap-1.5 text-[15px] text-[var(--px-ink)]">
                         {spec.name}
                         <i
-                          className="h-1.5 w-1.5 rounded-full"
+                          className="px-dot"
                           style={{ background: CATEGORY_COLORS[spec.category] }}
                         />
                       </span>
-                      <span className="block truncate text-[11px] text-[var(--wb-ink-muted)]">
+                      <span className="block truncate text-[11px] text-[var(--px-ink-soft)]">
                         {spec.blurb} · {yuan(spec.cost)}
                         {spec.footprint[0] * spec.footprint[1] > 1
                           ? ` · ${spec.footprint[0]}×${spec.footprint[1]}`
@@ -310,7 +319,7 @@ export default function TileSheet() {
                 );
               })}
             </div>
-            <p className="pb-2 text-[11px] text-[var(--wb-ink-muted)]">
+            <p className="pb-2 text-[11px] text-[var(--px-ink-soft)]">
               也可以从底部「建造」抽屉里挑卡牌，拖到沙盘上。
             </p>
           </div>

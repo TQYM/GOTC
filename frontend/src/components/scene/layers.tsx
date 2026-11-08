@@ -9,7 +9,7 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import type { Cell, Parcel, Tile, TileType } from "@/lib/contract";
-import { SCENE_COLORS } from "@/lib/palette";
+import { EXISTING_FACES, SCENE_COLORS } from "@/lib/palette";
 import {
   TERRAIN_HEIGHT,
   cellToWorld,
@@ -61,7 +61,7 @@ export function TerrainLayer({
       new THREE.LineBasicMaterial({
         color: SCENE_COLORS.grid,
         transparent: true,
-        opacity: 0.18,
+        opacity: 0.08,
       }),
     [],
   );
@@ -178,7 +178,7 @@ export function ForestLayer({
 
 /* ------------------------------------------------ 既有建筑占位（v1.1 occupied） */
 
-/** 真实片区的 OSM 建筑由 PR-28 渲染；这里只给 occupied 格一个 pastel 灰白体块占位 */
+/** 真实片区的 OSM 建筑由 PR-28 渲染；这里只给 occupied 格一个浅色体块占位（16 §3.4 既有建筑浅色底景） */
 export function OccupiedLayer({ parcel }: { parcel: Parcel }) {
   const g = gridOf(parcel);
   const cells = useMemo(() => {
@@ -194,7 +194,7 @@ export function OccupiedLayer({ parcel }: { parcel: Parcel }) {
     [g.cell],
   );
   const material = useMemo(
-    () => toonMaterial({ color: SCENE_COLORS.existingBuilding }),
+    () => toonMaterial({ color: EXISTING_FACES.residential.m }),
     [],
   );
   const ref = useRef<THREE.InstancedMesh>(null);
@@ -377,11 +377,11 @@ export function GhostLayer({
   );
   const ghostMat = useMemo(
     () =>
+      // 16 §5.1：放置预览用有序抖动（alphaHash）代替半透明，像素风的「半透明」
       toonMaterial({
         vertexColors: true,
-        transparent: true,
+        alphaHash: true,
         opacity: 0.55,
-        depthWrite: false,
       }),
     [],
   );

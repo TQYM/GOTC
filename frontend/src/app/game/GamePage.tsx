@@ -15,7 +15,7 @@ export default function GamePage() {
       <div className="grid h-screen place-items-center">
         <Link
           href="/"
-          className="rounded-md bg-accent px-4 py-2 font-medium text-bg"
+          className="px-action px-action-primary"
         >
           还没有城市，回首页创建
         </Link>

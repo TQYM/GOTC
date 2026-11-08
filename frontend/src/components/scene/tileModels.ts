@@ -1,5 +1,5 @@
 /**
- * 14 种区块的程序化卡通模型（11 §6.0 / §6.2）。
+ * 14 种区块的程序化像素体块模型（11 §6.2 / 16 §5.1：去圆角、统一色板、顶面提亮）。
  *
  * 每种区块的多个部件（楼体、屋顶、烟囱、十字……）合并为一个带顶点色的 BufferGeometry，
  * 以便同类区块用一个 InstancedMesh 合批（≤14 draw call）。
@@ -7,10 +7,9 @@
  */
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
 import type { TileType } from "@/lib/contract";
 import { TILE_SPECS } from "@/lib/catalog";
-import { CATEGORY_COLORS, SCENE_COLORS } from "@/lib/palette";
+import { CATEGORY_COLORS, CATEGORY_FACES, PX, SCENE_COLORS } from "@/lib/palette";
 
 class Parts {
   private list: THREE.BufferGeometry[] = [];
@@ -29,28 +28,25 @@ class Parts {
     if (rotY) g.rotateY(rotY);
     g.translate(x, y, z);
     const c = new THREE.Color(color);
+    // 像素画「顶亮」：朝上的面提亮，与 UI 缩略图的顶面色一致
+    const top = c.clone().lerp(new THREE.Color("#ffffff"), 0.22);
     const n = g.getAttribute("position").count;
+    const normal = g.getAttribute("normal");
     const arr = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
-      arr[i * 3] = c.r;
-      arr[i * 3 + 1] = c.g;
-      arr[i * 3 + 2] = c.b;
+      const k = normal && normal.getY(i) > 0.5 ? top : c;
+      arr[i * 3] = k.r;
+      arr[i * 3 + 1] = k.g;
+      arr[i * 3 + 2] = k.b;
     }
     g.setAttribute("color", new THREE.BufferAttribute(arr, 3));
     this.list.push(g);
     return this;
   }
 
-  /** 圆角体块，底面落在 y */
+  /** 直角体块（体素感，16 §5.1 去圆角），底面落在 y */
   box(w: number, h: number, d: number, color: string, x = 0, y = 0, z = 0) {
-    const radius = Math.min(2.2, h / 4, w / 4, d / 4);
-    return this.add(
-      new RoundedBoxGeometry(w, h, d, 2, radius),
-      color,
-      x,
-      y + h / 2,
-      z,
-    );
+    return this.add(new THREE.BoxGeometry(w, h, d), color, x, y + h / 2, z);
   }
 
   /** 直角薄板（地坪、标线），底面落在 y */
@@ -159,7 +155,9 @@ function make(type: TileType, s: number): THREE.BufferGeometry {
 
   switch (type) {
     case "res_low":
-      p.box(w * 0.8, 9, d * 0.8, base).hipRoof(w * 0.84, 7, "#E9A43B", 0, 9);
+      p.box(w * 0.8, 9, d * 0.8, base)
+        .box(w * 0.9, 3, d * 0.9, SCENE_COLORS.roof, 0, 9)
+        .box(w * 0.6, 3, d * 0.6, SCENE_COLORS.roof, 0, 12);
       break;
     case "res_mid":
       p.box(w * 0.9, 22, d * 0.9, base)
@@ -191,23 +189,23 @@ function make(type: TileType, s: number): THREE.BufferGeometry {
       break;
     case "ind_heavy":
       p.box(w * 0.92, 18, d * 0.58, base, 0, 0, -d * 0.18)
-        .cylinder(12, 26, "#d8d4e8", -w * 0.28, 0, d * 0.3, 14)
-        .cylinder(12, 26, "#d8d4e8", 0, 0, d * 0.3, 14)
-        .cylinder(4, 55, SCENE_COLORS.accentDark, w * 0.3, 0, d * 0.28)
-        .cylinder(4.3, 4, SCENE_COLORS.accentLight, w * 0.3, 47, d * 0.28)
-        .cylinder(4, 48, SCENE_COLORS.accentDark, w * 0.3, 0, -d * 0.38)
-        .cylinder(4.3, 4, SCENE_COLORS.accentLight, w * 0.3, 40, -d * 0.38);
+        .cylinder(12, 26, CATEGORY_FACES.industrial.w, -w * 0.28, 0, d * 0.3, 14)
+        .cylinder(12, 26, CATEGORY_FACES.industrial.w, 0, 0, d * 0.3, 14)
+        .box(8, 55, 8, CATEGORY_FACES.utility.m, w * 0.3, 0, d * 0.28)
+        .box(8.6, 4, 8.6, PX.berry, w * 0.3, 47, d * 0.28)
+        .box(8, 48, 8, CATEGORY_FACES.utility.m, w * 0.3, 0, -d * 0.38)
+        .box(8.6, 4, 8.6, PX.berry, w * 0.3, 40, -d * 0.38);
       break;
     case "green_park":
       p.slab(W - 4, 0.8, D - 4, base)
-        .slab(W - 4, 0.9, 4, "#efe3c4")
+        .slab(W - 4, 0.9, 4, PX["paper-2"])
         .tree(-12, -12, 1.1, 0.8)
         .tree(13, -8, 0.9, 0.8)
         .tree(-8, 13, 1, 0.8);
       break;
     case "green_plaza":
       p.slab(W - 6, 1, D - 6, lighten(base, 0.45))
-        .slab(W * 0.42, 1.3, D * 0.42, "#efe3c4")
+        .slab(W * 0.42, 1.3, D * 0.42, PX["paper-2"])
         .box(6, 24, 6, SCENE_COLORS.accentLight, 0, 1.3, 0)
         .tree(-W * 0.32, -D * 0.32, 1.3, 1)
         .tree(W * 0.32, -D * 0.32, 1.3, 1)
@@ -217,12 +215,12 @@ function make(type: TileType, s: number): THREE.BufferGeometry {
     case "edu_school":
       // 识别套件（13 §1.3）：L 形坡顶教学楼 + 红色塑胶跑道操场
       p.box(w, 13, d * 0.3, base, 0, 0, -d * 0.35)
-        .gable(w, d * 0.3 + 2, 6, "#c0504d", 0, 13, -d * 0.35)
+        .gable(w, d * 0.3 + 2, 6, PX["berry-dark"], 0, 13, -d * 0.35)
         .box(w * 0.28, 13, d * 0.42, base, -w * 0.36, 0, d * 0.13)
-        .oval(w * 0.3, d * 0.22, 0.8, "#e0664f", w * 0.16, 0, d * 0.2)
-        .oval(w * 0.22, d * 0.14, 1, "#7fd18c", w * 0.16, 0, d * 0.2)
+        .oval(w * 0.3, d * 0.22, 0.8, SCENE_COLORS.track, w * 0.16, 0, d * 0.2)
+        .oval(w * 0.22, d * 0.14, 1, SCENE_COLORS.trackInner, w * 0.16, 0, d * 0.2)
         .cylinder(0.6, 18, SCENE_COLORS.accentDark, w * 0.44, 0, -d * 0.08, 6)
-        .slab(5, 3, 0.4, "#ff4d4f", w * 0.44 + 2.6, 15, -d * 0.08);
+        .slab(5, 3, 0.4, PX.bad, w * 0.44 + 2.6, 15, -d * 0.08);
       break;
     case "med_clinic":
       p.box(w * 0.86, 22, d * 0.72, base, 0, 0, -d * 0.08)

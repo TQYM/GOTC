@@ -1,28 +1,49 @@
 @import "tailwindcss";
 
-/* 05 §4：规划院蓝图 + 沙盘模型气质——深蓝灰底、等高线纹理 */
+/* ——— 「CITY20 Pixel 24」像素小镇设计令牌（16 §3）———
+   值与 src/lib/palette.ts 的 PX 一一对应，tests/palette.test.ts 校验一致性。 */
 :root {
-  --bg: #16202b;
-  --bg-elev: #1d2936;
-  --line: #2c3b4c;
-  --fg: #e6edf3;
-  --fg-muted: #93a4b6;
-  --accent: #5fb3f9;
+  --px-ink: #2A2340;
+  --px-ink-soft: #5B5277;
+  --px-paper: #FFF8E7;
+  --px-paper-2: #F6E3B8;
+  --px-paper-4: #E2C48A;
+  --px-paper-shade: #F0D9A6;
+  --px-sky: #C6ECFF;
+  --px-sky-4: #7CCBFF;
+  --px-ok: #3CCB6E;
+  --px-bad: #FF4F5E;
+  --px-warn: #FFB020;
+  --px-sun: #FFC93C;
+  --px-sun-light: #FFE07A;
+  --px-sun-dark: #E0A21F;
+  --px-orange: #FF8A3D;
+  --px-grape: #9D7BFF;
+  --px-mint: #3DD68C;
+  --px-berry: #FF5C7A;
+  --px-berry-dark: #D93D5C;
+  --px-blue: #3D8BFF;
+  --px-slate: #8A97B4;
+  --px-tint-sun: #FFF3C4;
+  --px-tint-blue: #DCEBFF;
+  --px-tint-mint: #DFFBEA;
+  --px-tint-berry: #FFE0E6;
+  --px-tint-grape: #E8E0FF;
 
-  --terrain-flat: #ece4d2;
-  --terrain-hill: #c4924f;
-  --terrain-river: #3a78b8;
-  --terrain-bank: #9cc6e2;
-  --terrain-forest: #2f6a3e;
-  --terrain-road: #8b9099;
+  /* 像素描边：只沿四个方向偏移，角上自然缺一格，形成像素圆角 */
+  --px-outline: 0 -3px 0 var(--px-ink), 0 3px 0 var(--px-ink), -3px 0 0 var(--px-ink),
+    3px 0 0 var(--px-ink);
+  --px-outline-2: 0 -2px 0 var(--px-ink), 0 2px 0 var(--px-ink), -2px 0 0 var(--px-ink),
+    2px 0 0 var(--px-ink);
+  --px-drop: 6px 7px 0 rgba(42, 35, 64, 0.28);
 
-  --cat-residential: #f2c14e;
-  --cat-commercial: #d4a017;
-  --cat-industrial: #5b4b8a;
-  --cat-green: #3fb8a0;
-  --cat-service: #d9534f;
-  --cat-transport: #3b82f6;
-  --cat-utility: #9aa3ad;
+  /* 05 §4 旧语义令牌映射到像素色板，未单独改造的页面（sandbox 等）自动换成浅色纸面 */
+  --bg: var(--px-sky);
+  --bg-elev: var(--px-paper);
+  --line: var(--px-paper-4);
+  --fg: var(--px-ink);
+  --fg-muted: var(--px-ink-soft);
+  --accent: var(--px-blue);
 }
 
 @theme inline {
@@ -32,8 +53,9 @@
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
   --color-accent: var(--accent);
-  --font-sans:
-    "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-sans: "Pixelify Sans", "ZCOOL QingKe HuangYou", "PingFang SC", "Microsoft YaHei",
+    "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-mono: "Pixelify Sans", ui-monospace, monospace;
 }
 
 html,
@@ -42,221 +64,360 @@ body {
 }
 
 body {
-  background-color: var(--bg);
-  /* 等高线纹理：两组错位的径向细环，纯 CSS，零资源 */
-  background-image:
-    repeating-radial-gradient(
-      circle at 18% 22%,
-      transparent 0 38px,
-      rgba(95, 179, 249, 0.05) 38px 39px
-    ),
-    repeating-radial-gradient(
-      circle at 82% 78%,
-      transparent 0 46px,
-      rgba(95, 179, 249, 0.04) 46px 47px
-    );
-  color: var(--fg);
+  background-color: var(--px-sky);
+  color: var(--px-ink);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* 指标脉冲（05 §2.3：300ms，升绿降红） */
+:focus-visible {
+  outline: 3px solid var(--px-blue);
+  outline-offset: 3px;
+}
+
+/* 指标脉冲（05 §2.3：升绿降红；像素风改为两帧闪烁） */
 @keyframes metric-pulse-up {
-  0% {
-    color: #4ade80;
-    transform: scale(1.12);
+  0%,
+  49% {
+    color: var(--px-ok);
+    transform: translateY(-2px);
   }
+  50%,
   100% {
     color: inherit;
-    transform: scale(1);
+    transform: translateY(0);
   }
 }
 @keyframes metric-pulse-down {
-  0% {
-    color: #f87171;
-    transform: scale(1.12);
+  0%,
+  49% {
+    color: var(--px-bad);
+    transform: translateY(2px);
   }
+  50%,
   100% {
     color: inherit;
-    transform: scale(1);
+    transform: translateY(0);
   }
 }
 .metric-pulse-up {
   display: inline-block;
-  animation: metric-pulse-up 300ms ease-out;
+  animation: metric-pulse-up 320ms steps(1, end) 2;
 }
 .metric-pulse-down {
   display: inline-block;
-  animation: metric-pulse-down 300ms ease-out;
-}
-@media (prefers-reduced-motion: reduce) {
-  .metric-pulse-up,
-  .metric-pulse-down {
-    animation: none;
-  }
+  animation: metric-pulse-down 320ms steps(1, end) 2;
 }
 
-/* ——— WorldBox 风格 HUD 设计令牌（PR-37 UI 重构）———
-   全屏沙盘 + 悬浮深棕金边面板：圆角、金色细边、羊皮纸文字、短促 ease-out 动效 */
-:root {
-  --wb-panel: rgba(28, 22, 17, 0.86);
-  --wb-panel-strong: rgba(36, 28, 21, 0.94);
-  --wb-gold: #d9b26a;
-  --wb-gold-strong: #f2cf8b;
-  --wb-gold-line: rgba(217, 178, 106, 0.26);
-  --wb-gold-fill: rgba(217, 178, 106, 0.12);
-  --wb-ink: #f4e9d4;
-  --wb-ink-muted: #bfae8d;
-  --wb-shadow: 0 12px 32px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --wb-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --wb-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+/* ——— 组件：面板 ——— */
+.px-panel {
+  background: var(--px-paper);
+  color: var(--px-ink);
+  box-shadow:
+    var(--px-outline),
+    inset 3px 3px 0 #ffffff,
+    inset -3px -3px 0 var(--px-paper-shade),
+    var(--px-drop);
 }
 
-.wb-panel {
-  background: var(--wb-panel);
-  border: 1px solid var(--wb-gold-line);
-  box-shadow: var(--wb-shadow);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: var(--wb-ink);
+/* 面板内凹区：卡片底、信息行 */
+.px-well {
+  background: var(--px-paper-2);
+  box-shadow: inset 2px 2px 0 var(--px-paper-4);
 }
 
-.wb-panel-strong {
-  background: var(--wb-panel-strong);
-}
-
-/* 圆形能力按钮（左下 dock / 右上时间控制）：按压缩放反馈 */
-.wb-round {
+/* ——— 组件：方块能力按钮（能力坞 / 时间控制） ——— */
+.px-btn {
+  position: relative;
   display: grid;
   place-items: center;
   width: 3.25rem;
   height: 3.25rem;
-  border-radius: 9999px;
-  border: 1px solid var(--wb-gold-line);
-  background: var(--wb-panel-strong);
-  color: var(--wb-ink);
-  box-shadow: var(--wb-shadow);
-  transition: transform 140ms var(--wb-ease-out), border-color 140ms var(--wb-ease-out),
-    box-shadow 140ms var(--wb-ease-out), background-color 140ms var(--wb-ease-out);
+  background: var(--px-paper);
+  color: var(--px-ink);
+  box-shadow:
+    var(--px-outline),
+    inset 3px 3px 0 #ffffff,
+    inset 0 -6px 0 var(--px-paper-4),
+    0 7px 0 rgba(42, 35, 64, 0.3);
+  transition: transform 80ms steps(2, end);
 }
 @media (hover: hover) and (pointer: fine) {
-  .wb-round:hover {
-    border-color: var(--wb-gold);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--wb-gold-line);
+  .px-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
   }
 }
-.wb-round:active {
-  transform: scale(0.95);
+.px-btn:active:not(:disabled),
+.px-btn[aria-pressed="true"] {
+  transform: translateY(3px);
+  box-shadow:
+    var(--px-outline),
+    inset 3px 3px 0 var(--px-sun-light),
+    inset 0 -5px 0 var(--px-sun-dark),
+    0 3px 0 rgba(42, 35, 64, 0.3);
 }
-.wb-round[aria-pressed="true"] {
-  border-color: var(--wb-gold-strong);
-  background: linear-gradient(180deg, rgba(217, 178, 106, 0.24), rgba(217, 178, 106, 0.1));
-  color: var(--wb-gold-strong);
+.px-btn[aria-pressed="true"] {
+  background: var(--px-sun);
 }
-.wb-round:disabled {
-  opacity: 0.4;
+.px-btn:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
 }
+.px-btn-primary-tone {
+  background: var(--px-tint-mint);
+  box-shadow:
+    var(--px-outline),
+    inset 3px 3px 0 #ffffff,
+    inset 0 -6px 0 #8ef0bf,
+    0 7px 0 rgba(42, 35, 64, 0.3);
+}
 
-/* 资源胶囊 */
-.wb-pill {
+/* 按钮下方的小标签 / 键位角标 */
+.px-caption {
+  padding: 2px 5px;
+  background: var(--px-ink);
+  color: var(--px-paper);
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.px-key {
+  position: absolute;
+  right: -7px;
+  bottom: -9px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  background: var(--px-ink);
+  color: var(--px-paper);
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* ——— 组件：文字按钮（主操作 / 危险 / 次要） ——— */
+.px-action {
+  display: inline-grid;
+  place-items: center;
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  background: var(--px-paper);
+  color: var(--px-ink);
+  font-size: 15px;
+  line-height: 1;
+  box-shadow:
+    var(--px-outline),
+    inset 3px 3px 0 #ffffff,
+    inset 0 -5px 0 var(--px-paper-4),
+    0 5px 0 rgba(42, 35, 64, 0.3);
+  transition: transform 80ms steps(2, end);
+}
+.px-action:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow:
+    var(--px-outline),
+    inset 3px 3px 0 #ffffff,
+    inset 0 -3px 0 var(--px-paper-4),
+    0 2px 0 rgba(42, 35, 64, 0.3);
+}
+.px-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.px-action-primary {
+  background: var(--px-sun);
+  box-shadow:
+    var(--px-outline),
+    inset 3px 3px 0 var(--px-sun-light),
+    inset 0 -5px 0 var(--px-sun-dark),
+    0 5px 0 rgba(42, 35, 64, 0.3);
+}
+.px-action-danger {
+  background: var(--px-berry);
+  color: #ffffff;
+  text-shadow: 2px 2px 0 #b02f4a;
+  box-shadow:
+    var(--px-outline),
+    inset 3px 3px 0 #ff9aae,
+    inset 0 -5px 0 var(--px-berry-dark),
+    0 5px 0 rgba(42, 35, 64, 0.3);
+}
+.px-icon-btn {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  background: var(--px-paper);
+  box-shadow:
+    0 0 0 3px var(--px-ink),
+    inset 0 -4px 0 var(--px-paper-4);
+}
+.px-icon-btn:active {
+  transform: translateY(2px);
+}
+
+/* ——— 组件：资源槽（顶部资源条） ——— */
+.px-slot {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  min-height: 2.4rem;
-  padding: 0 0.8rem;
-  border-radius: 9999px;
-  border: 1px solid var(--wb-gold-line);
-  background: var(--wb-panel);
-  box-shadow: var(--wb-shadow);
-  color: var(--wb-ink);
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 4px 10px 4px 4px;
+  background: var(--px-paper-2);
+  color: var(--px-ink);
+  box-shadow: inset 2px 2px 0 var(--px-paper-4);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  transition: border-color 140ms var(--wb-ease-out), transform 140ms var(--wb-ease-out);
 }
-.wb-pill:hover {
-  border-color: var(--wb-gold);
-}
-.wb-pill:active {
-  transform: scale(0.98);
+.px-slot-icon {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  box-shadow: 0 0 0 2px var(--px-ink);
 }
 
-/* 卡牌 / 分类 tab */
-.wb-card {
-  border: 1px solid var(--wb-gold-line);
-  background: rgba(44, 35, 26, 0.66);
-  border-radius: 0.8rem;
-  transition: transform 140ms var(--wb-ease-out), border-color 140ms var(--wb-ease-out),
-    background-color 140ms var(--wb-ease-out);
+/* ——— 组件：背包卡牌 ——— */
+.px-card {
+  position: relative;
+  background: var(--px-paper-2);
+  color: var(--px-ink);
+  box-shadow:
+    var(--px-outline),
+    inset 2px 2px 0 var(--px-paper),
+    inset 0 -4px 0 var(--px-paper-4),
+    4px 5px 0 rgba(42, 35, 64, 0.22);
+  transition: transform 80ms steps(2, end);
 }
 @media (hover: hover) and (pointer: fine) {
-  .wb-card:hover {
-    transform: translateY(-2px);
-    border-color: var(--wb-gold);
-    background: rgba(58, 46, 33, 0.8);
+  .px-card:hover:not(:disabled) {
+    transform: translateY(-3px);
   }
 }
-.wb-card:active {
-  transform: scale(0.97);
+.px-card:active:not(:disabled) {
+  transform: translateY(2px);
 }
-.wb-card[aria-pressed="true"] {
-  border-color: var(--wb-gold-strong);
-  background: linear-gradient(180deg, rgba(217, 178, 106, 0.26), rgba(217, 178, 106, 0.1));
+.px-card[aria-pressed="true"] {
+  background: var(--px-sun-light);
+  transform: translateY(-4px);
+  box-shadow:
+    var(--px-outline),
+    inset 2px 2px 0 #fff3c4,
+    0 0 0 6px var(--px-sun),
+    0 0 0 9px var(--px-ink);
 }
-.wb-card:disabled {
+.px-card:disabled {
   opacity: 0.45;
 }
 
-.wb-tab {
+/* ——— 组件：页签 / 小标签 ——— */
+.px-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   min-height: 2rem;
   padding: 0 0.7rem;
-  border-radius: 9999px;
-  border: 1px solid transparent;
-  color: var(--wb-ink-muted);
-  font-size: 0.75rem;
-  transition: color 140ms var(--wb-ease-out), background-color 140ms var(--wb-ease-out),
-    border-color 140ms var(--wb-ease-out);
+  background: var(--px-paper-4);
+  color: var(--px-ink);
+  font-size: 13px;
+  box-shadow: var(--px-outline-2);
 }
-.wb-tab[aria-pressed="true"] {
-  color: #1c1610;
-  background: var(--wb-gold);
-  border-color: var(--wb-gold-strong);
+.px-tab:hover {
+  background: var(--px-paper-2);
 }
-.wb-tab:active {
-  transform: scale(0.97);
+.px-tab[aria-pressed="true"] {
+  background: var(--px-sun);
+}
+.px-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 6px;
+  font-size: 12px;
+  line-height: 1;
+  box-shadow: 0 0 0 2px var(--px-ink);
+}
+.px-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 2px var(--px-ink);
 }
 
-/* 入场动效：短促、ease-out、从下往上 8–10px；绝不用 scale(0) */
-@keyframes wb-rise {
+/* ——— 组件：输入框 ——— */
+.px-input {
+  min-height: 2.75rem;
+  padding: 0 0.75rem;
+  background: #ffffff;
+  color: var(--px-ink);
+  box-shadow:
+    0 0 0 3px var(--px-ink),
+    inset 3px 3px 0 var(--px-paper-2);
+}
+.px-input::placeholder {
+  color: var(--px-ink-soft);
+}
+.px-input:focus {
+  outline: none;
+  box-shadow:
+    0 0 0 3px var(--px-blue),
+    inset 3px 3px 0 var(--px-paper-2);
+}
+
+/* 放置提示条（非法红 / 警告黄） */
+.px-tip {
+  box-shadow:
+    var(--px-outline),
+    var(--px-drop);
+  text-shadow: 1px 1px 0 rgba(42, 35, 64, 0.25);
+}
+
+/* ——— 组件：对话气泡（AI 三角色） ——— */
+.px-bubble {
+  background: #ffffff;
+  color: var(--px-ink);
+  box-shadow:
+    var(--px-outline-2),
+    3px 4px 0 rgba(42, 35, 64, 0.22);
+}
+
+/* ——— 像素图标 / sprite ——— */
+.px-sprite {
+  shape-rendering: crispEdges;
+  image-rendering: pixelated;
+}
+
+/* ——— 动效：台阶式入场，绝不 scale(0) ——— */
+@keyframes px-rise {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(8px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
-@keyframes wb-slide-up {
+@keyframes px-slide-up {
   from {
-    opacity: 0;
     transform: translateY(100%);
   }
   to {
-    opacity: 1;
     transform: translateY(0);
   }
 }
-@keyframes wb-slide-right {
+@keyframes px-slide-right {
   from {
     opacity: 0;
-    transform: translateX(14px);
+    transform: translateX(16px);
   }
   to {
     opacity: 1;
     transform: translateX(0);
   }
 }
-@keyframes wb-fade {
+@keyframes px-fade {
   from {
     opacity: 0;
   }
@@ -264,32 +425,45 @@ body {
     opacity: 1;
   }
 }
-.wb-anim-rise {
-  animation: wb-rise 220ms var(--wb-ease-out) both;
+@keyframes px-bob {
+  0%,
+  49% {
+    transform: translateY(0);
+  }
+  50%,
+  100% {
+    transform: translateY(-4px);
+  }
 }
-.wb-anim-slide-up {
-  animation: wb-slide-up 240ms var(--wb-ease-drawer) both;
+.px-anim-rise {
+  animation: px-rise 200ms steps(4, end) both;
 }
-.wb-anim-slide-right {
-  animation: wb-slide-right 200ms var(--wb-ease-out) both;
+.px-anim-slide-up {
+  animation: px-slide-up 220ms steps(5, end) both;
 }
-.wb-anim-fade {
-  animation: wb-fade 180ms var(--wb-ease-out) both;
+.px-anim-slide-right {
+  animation: px-slide-right 180ms steps(4, end) both;
 }
-
-/* 描边省略：性能优先，卡牌用金色细边代替像素描边 */
+.px-anim-fade {
+  animation: px-fade 160ms steps(3, end) both;
+}
+.px-anim-bob {
+  animation: px-bob 800ms steps(1, end) infinite;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .wb-anim-rise,
-  .wb-anim-slide-up,
-  .wb-anim-slide-right,
-  .wb-anim-fade {
+  .metric-pulse-up,
+  .metric-pulse-down,
+  .px-anim-rise,
+  .px-anim-slide-up,
+  .px-anim-slide-right,
+  .px-anim-fade,
+  .px-anim-bob {
     animation: none;
   }
-  .wb-round,
-  .wb-card,
-  .wb-pill,
-  .wb-tab {
+  .px-btn,
+  .px-card,
+  .px-action {
     transition: none;
   }
 }
@@ -307,4 +481,9 @@ body {
   pointer-events: none;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
   will-change: transform;
+}
+
+/* 3D 画布像素化放大（16 §5.2）：低分辨率渲染后最近邻放大 */
+.px-canvas canvas {
+  image-rendering: pixelated;
 }

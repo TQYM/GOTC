@@ -1,12 +1,12 @@
 "use client";
 
 /**
- * CityScene3D（05 §2.3 / 11 §6 / PR-36）：卡通风格真 3D 场景。
+ * CityScene3D（05 §2.3 / 11 §6 / PR-36 / 16 §5）：真 3D 卡通沙盘，可选像素化后处理。
  *
  * - 传入 `map`（北京全域数据包）时：渲染 154×189km 全域地形 / 建筑 / 道路 / 水系 / 地名（各层 1 个 draw call，
- *   48×48 格分块视锥裁剪），可玩沙盘（48×48 @50m）作为一块「沙盘」嵌在朝阳 CBD 片区；
- *   相机 500m–200km 对数缩放、预设导航与双击飞抵。
- * - 不传 `map` 时：仅渲染可玩沙盘（PR-04 行为）。
+ *   视锥分块裁剪），可玩沙盘作为一块「沙盘」嵌在对应片区；相机 500m–200km 对数缩放、预设导航与双击飞抵。
+ * - 不传 `map` 时：仅渲染可玩沙盘（PR-04 行为）——东西朝海 48km 大棋盘走这条路径。
+ * - 像素化渲染（PixelPass）：低分辨率渲染 + 最近邻放大 + 深度墨线，像素度由本端偏好控制（0 关闭）。
  * - 天际线式操控（CameraRig：右键旋转、中键 / WASD 平移、滚轮向光标缩放、Home 复位）；
  * - 1 方向光 + 半球环境光，关闭色调映射（flat）保留卡通高饱和配色；全域模式关闭阴影；
  * - 只渲染契约数据（parcel + tiles[].cells），放置 / 拆除接口不变，坐标换算统一走 coords.ts。
@@ -20,7 +20,9 @@ import { presetShot, type CameraShot, type PresetKey } from "@/lib/map/presets";
 import { coreRectWorld } from "@/lib/map/coreArea";
 import { SCENE_COLORS } from "@/lib/palette";
 import CameraRig from "./CameraRig";
+import PixelPass from "./PixelPass";
 import RealCityLayers from "./RealCityLayers";
+import { usePrefs } from "@/store/prefs";
 import {
   boardAnchorOnMap,
   cellToWorld,
@@ -103,6 +105,8 @@ export interface CityScene3DProps {
     congestion: number;
     happiness: number;
   } | null;
+  /** 像素度（每个大像素占的 CSS 像素，0 关闭）；缺省读本端偏好 */
+  pixelScale?: number;
   /** 暴露 window.__city20Scene 供 E2E 拾取校验 */
   debugHook?: boolean;
   className?: string;
@@ -281,8 +285,13 @@ export default function CityScene3D({
   onOutsideCore,
   ambience = null,
   debugHook = false,
+  pixelScale,
   className,
 }: CityScene3DProps) {
+  const prefScale = usePrefs((s) => s.pixelScale);
+  const hydratePrefs = usePrefs((s) => s.hydrate);
+  useEffect(() => hydratePrefs(), [hydratePrefs]);
+  const pixel = pixelScale ?? prefScale ?? 0;
   const rightDown = useRef<[number, number] | null>(null);
   const coarse = useCoarsePointer();
   const perf = usePerfFlag();
@@ -398,6 +407,7 @@ export default function CityScene3D({
       className={`relative h-full w-full min-h-0 min-w-0 ${className ?? ""}`}
       data-testid="city-scene"
       data-map={world ? "full" : "board"}
+      data-pixel-scale={pixel}
       style={cursor ? { cursor } : undefined}
       onPointerDown={(e) => {
         if (e.button === 2) rightDown.current = [e.clientX, e.clientY];
@@ -416,7 +426,7 @@ export default function CityScene3D({
       onContextMenu={(e) => e.preventDefault()}
     >
       <Canvas
-        shadows={shadowOn ? "percentage" : false}
+        shadows={shadowOn ? "basic" : false}
         dpr={[1, coarse ? 1.5 : 2]}
         camera={{ position: camPos, fov: 35, near: 5, far: boardExtent * 8 }}
         flat
@@ -441,7 +451,7 @@ export default function CityScene3D({
           far={world ? 600000 : boardExtent * 8}
         />
         <hemisphereLight
-          args={["#ffffff", world ? "#b8c4cc" : "#c9d6b8", world ? 1.05 : 1.15]}
+          args={[SCENE_COLORS.hemiSky, world ? "#b8c4cc" : SCENE_COLORS.hemiGround, world ? 1.05 : 1.15]}
         />
         <directionalLight
           position={
@@ -560,6 +570,7 @@ export default function CityScene3D({
           boundsCenter={core ? [core.centerX, core.centerZ] : undefined}
           fly={fly}
         />
+        {pixel > 1 && <PixelPass pixelScale={pixel} />}
         {onStats && <StatsProbe onStats={onStats} />}
         {perf && <StatsProbe onStats={setPerfStats} />}
         {debugHook && <DebugHook parcel={parcel} offset={boardOffset} />}

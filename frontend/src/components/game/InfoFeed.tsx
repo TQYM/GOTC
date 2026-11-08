@@ -10,6 +10,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FeedItem } from "@/store/game";
 import { useGame } from "@/store/game";
+import { PixelIcon } from "@/components/ui/PixelSprite";
 
 type Filter = "all" | "news" | "citizen" | "mentor";
 
@@ -28,23 +29,21 @@ const THEORY: Record<string, string> = {
   road_hierarchy: "路网分级",
 };
 
-const SENTIMENT: Record<string, { ring: string; label: string }> = {
-  angry: { ring: "border-red-400/60", label: "不满" },
-  happy: { ring: "border-emerald-400/60", label: "满意" },
-  neutral: { ring: "border-slate-400/50", label: "中立" },
+const SENTIMENT: Record<string, { tint: string; chip: string; label: string }> = {
+  angry: { tint: "var(--px-tint-berry)", chip: "var(--px-bad)", label: "不满" },
+  happy: { tint: "var(--px-tint-mint)", chip: "var(--px-ok)", label: "满意" },
+  neutral: { tint: "var(--px-paper-2)", chip: "var(--px-slate)", label: "中立" },
 };
 
 const SEVERITY: Record<string, string> = {
-  info: "border-l-sky-400",
-  warning: "border-l-amber-400",
-  alert: "border-l-red-500",
+  info: "var(--px-blue)",
+  warning: "var(--px-warn)",
+  alert: "var(--px-bad)",
 };
 
 function AiBadge({ source }: { source: "ai" | "template" }) {
   return source === "ai" ? (
-    <span className="rounded bg-violet-500/30 px-1 text-[10px] text-violet-200">
-      AI
-    </span>
+    <span className="px-chip bg-[var(--px-tint-grape)] px-1 text-[10px]">AI</span>
   ) : null;
 }
 
@@ -54,14 +53,22 @@ function Item({ item }: { item: FeedItem }) {
       return (
         <article
           data-testid="feed-news"
-          className={`rounded-md border border-line border-l-4 ${SEVERITY[item.data.severity] ?? ""} bg-bg px-3 py-2`}
+          className="px-bubble flex gap-2.5 px-3 py-2"
         >
+          <span
+            className="w-1.5 shrink-0 self-stretch"
+            style={{ background: SEVERITY[item.data.severity] ?? SEVERITY.info }}
+            aria-hidden
+          />
+          <div className="min-w-0 flex-1">
           <header className="flex items-center gap-1.5 text-[11px] text-fg-muted">
-            📰 数据大脑 · 第 {item.data.at_year} 年{" "}
+            <PixelIcon name="brain" scale={1} />
+            数据大脑 · 第 {item.data.at_year} 年{" "}
             <AiBadge source={item.data.source} />
           </header>
-          <h3 className="mt-0.5 text-sm font-semibold">{item.data.headline}</h3>
+          <h3 className="mt-1 text-[15px] leading-snug">{item.data.headline}</h3>
           <p className="text-xs text-fg-muted">{item.data.body}</p>
+          </div>
         </article>
       );
     case "citizen": {
@@ -69,14 +76,18 @@ function Item({ item }: { item: FeedItem }) {
       return (
         <article data-testid="feed-citizen" className="flex gap-2">
           <div
-            className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border-2 ${s.ring} bg-bg-elev text-xs`}
+            className="grid h-9 w-9 shrink-0 place-items-center"
+            style={{ background: s.tint, boxShadow: "0 0 0 3px var(--px-ink)" }}
             aria-hidden
           >
-            {item.data.persona.slice(-2, -1) || "市"}
+            <PixelIcon name="citizen" scale={2} />
           </div>
-          <div className="min-w-0 rounded-2xl rounded-tl-sm bg-bg-elev px-3 py-1.5">
+          <div className="px-bubble min-w-0 flex-1 px-3 py-1.5">
             <div className="flex items-center gap-1.5 text-[11px] text-fg-muted">
-              {item.data.persona} · {s.label}{" "}
+              {item.data.persona}
+              <span className="px-chip px-1 text-[10px] text-white" style={{ background: s.chip }}>
+                {s.label}
+              </span>
               <AiBadge source={item.data.source} />
             </div>
             <p className="text-sm">{item.data.text}</p>
@@ -88,14 +99,14 @@ function Item({ item }: { item: FeedItem }) {
       return (
         <article
           data-testid="feed-mentor"
-          className={`rounded-lg border px-3 py-2 ${
-            item.data.severity === "warning"
-              ? "border-amber-400/60 bg-amber-500/10"
-              : "border-violet-400/50 bg-violet-500/10"
-          }`}
+          className="px-bubble px-3 py-2"
+          style={{
+            background: item.data.severity === "warning" ? "var(--px-tint-sun)" : "var(--px-tint-grape)",
+          }}
         >
-          <header className="flex items-center gap-1.5 text-[11px] text-violet-200">
-            🎓 规划导师 <AiBadge source={item.data.source} />
+          <header className="flex items-center gap-1.5 text-[12px]">
+            <PixelIcon name="mentor" scale={1} />
+            规划导师 <AiBadge source={item.data.source} />
           </header>
           <p className="mt-0.5 text-sm">{item.data.comment}</p>
           {item.data.top_issues.length > 0 && (
@@ -110,7 +121,7 @@ function Item({ item }: { item: FeedItem }) {
               {item.data.theory_refs.map((r) => (
                 <span
                   key={r}
-                  className="rounded-full bg-violet-500/20 px-2 text-[10px] text-violet-100"
+                  className="px-chip bg-[var(--px-paper)] px-1.5 text-[10px]"
                 >
                   {THEORY[r] ?? r}
                 </span>
@@ -184,10 +195,10 @@ export default function InfoFeed() {
 
   const dot =
     conn === "open"
-      ? "bg-emerald-400"
+      ? "bg-[var(--px-ok)]"
       : conn === "connecting"
-        ? "bg-amber-400 animate-pulse"
-        : "bg-red-500 animate-pulse";
+        ? "bg-[var(--px-warn)] px-anim-bob"
+        : "bg-[var(--px-bad)] px-anim-bob";
   const connLabel =
     conn === "open" ? "已连接" : conn === "connecting" ? "连接中" : "已断开";
 
@@ -196,21 +207,21 @@ export default function InfoFeed() {
       className="flex h-full min-h-0 flex-col"
       data-testid="info-feed"
     >
-      <header className="flex items-center justify-between gap-2 border-b border-[var(--wb-gold-line)] px-3 py-2">
-        <h2 className="text-sm font-bold">城市动态</h2>
+      <header className="flex items-center justify-between gap-2 px-3 py-2">
+        <h2 className="text-[17px] font-normal">城市动态</h2>
         <span
           className="flex items-center gap-1.5 text-[11px] text-fg-muted"
           data-testid="conn-state"
           data-conn={conn}
         >
-          <span className={`inline-block h-2 w-2 rounded-full ${dot}`} />
+          <span className={`px-dot ${dot}`} />
           {connLabel}
         </span>
       </header>
 
       {conn === "down" && (
         <div
-          className="bg-red-600/90 px-3 py-1.5 text-xs text-white"
+          className="bg-[var(--px-bad)] px-3 py-1.5 text-xs text-white"
           role="status"
           data-testid="conn-banner"
         >
@@ -228,7 +239,7 @@ export default function InfoFeed() {
       )}
 
       <nav
-        className="flex flex-wrap gap-1 border-b border-[var(--wb-gold-line)] px-2 py-2"
+        className="flex flex-wrap gap-2.5 border-b-[3px] border-[var(--px-ink)] px-3 pb-3 pt-1"
         aria-label="信息流筛选"
       >
         {FILTERS.map((f) => (
@@ -237,7 +248,7 @@ export default function InfoFeed() {
             type="button"
             onClick={() => setFilter(f.key)}
             aria-pressed={filter === f.key}
-            className={`wb-tab ${filter === f.key ? "" : "hover:bg-white/5"}`}
+            className="px-tab"
           >
             {f.label}
           </button>
@@ -248,7 +259,7 @@ export default function InfoFeed() {
         <div
           ref={listRef}
           onScroll={onScroll}
-          className="h-full space-y-2 overflow-y-auto px-3 py-2"
+          className="h-full space-y-3 overflow-y-auto px-3 py-3"
           data-testid="feed-list"
         >
           {shown.length === 0 ? (
@@ -267,7 +278,7 @@ export default function InfoFeed() {
               setStick(true);
               setUnread(0);
             }}
-            className="absolute bottom-2 left-1/2 min-h-9 -translate-x-1/2 rounded-full bg-[var(--wb-gold)] px-3 text-xs font-bold text-[#1c1610] shadow"
+            className="px-action px-action-primary absolute bottom-3 left-1/2 min-h-9 -translate-x-1/2 text-xs"
           >
             有 {unread} 条新消息 ↓
           </button>

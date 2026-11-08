@@ -1,9 +1,11 @@
 "use client";
 
 /**
- * 左下能力坞（WorldBox 重构）：圆形能力按钮——建造 / 拆除 / 更新改造 / 选择 / 城市面板 / 消息。
- * 建造展开底部卡牌抽屉；其余直接切换游戏工具（逻辑全部沿用 store，不改玩法）。
+ * 左下能力坞（16 §4.4）：方块快捷栏——建造 / 拆除 / 更新改造 / 选择 / 城市面板 / 消息，按钮下标 1–6 键位提示。
+ * 建造展开底部背包抽屉；其余直接切换游戏工具（逻辑全部沿用 store，不改玩法）。
  */
+import { PixelIcon } from "@/components/ui/PixelSprite";
+import type { IconName } from "@/lib/pixelArt";
 import { useGame } from "@/store/game";
 
 interface Props {
@@ -13,21 +15,21 @@ interface Props {
   panelTab: "city" | "feed" | null;
 }
 
-function RoundButton({
+function DockButton({
   testId,
   icon,
   label,
+  hotkey,
   active = false,
   disabled = false,
-  tone,
   onClick,
 }: {
   testId?: string;
-  icon: string;
+  icon: IconName;
   label: string;
+  hotkey: string;
   active?: boolean;
   disabled?: boolean;
-  tone?: string;
   onClick: () => void;
 }) {
   return (
@@ -39,11 +41,11 @@ function RoundButton({
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
-      className="wb-round relative"
-      style={tone ? { color: tone } : undefined}
+      className="px-btn h-14 w-14"
     >
-      <span className="text-xl leading-none" aria-hidden>
-        {icon}
+      <PixelIcon name={icon} scale={2} />
+      <span className="px-key" aria-hidden>
+        {hotkey}
       </span>
     </button>
   );
@@ -57,33 +59,49 @@ export default function AbilityDock({ buildOpen, onOpenBuild, onOpenPanel, panel
   const exitTool = useGame((s) => s.exitTool);
   const buildable = phase === "building" && !busy;
 
+  const hint =
+    tool.kind === "place"
+      ? "放置模式 · 左键落子，右键 / ESC 退出"
+      : tool.kind === "remove"
+        ? "拆除模式 · 点地块确认拆除"
+        : tool.kind === "redevelop"
+          ? "更新改造模式 · 点既有建筑"
+          : "点「建造」挑区块，或直接点地块看详情";
+
   return (
     <div
-      className="pointer-events-auto flex flex-col gap-2"
+      className="pointer-events-auto flex flex-col items-start gap-4"
       data-testid="ability-dock"
       role="toolbar"
       aria-label="能力坞"
     >
-      <div className="flex items-end gap-2">
-        <RoundButton
+      <p className="flex items-center gap-2 bg-[var(--px-ink)] px-3 py-1.5 text-[13px] leading-none text-[var(--px-paper)] shadow-[4px_5px_0_rgba(42,35,64,0.3)]">
+        <span className="inline-block h-2 w-2 bg-[var(--px-sun)]" aria-hidden />
+        {hint}
+      </p>
+      <div className="flex items-center gap-3.5 pb-1">
+        <DockButton
           testId="dock-build"
-          icon="🏗️"
-          label={buildOpen ? "收起建造卡牌" : "建造"}
-          active={buildOpen}
+          icon="build"
+          hotkey="1"
+          label={buildOpen ? "收起建造背包" : "建造"}
+          active={buildOpen || tool.kind === "place"}
           disabled={phase !== "building"}
           onClick={onOpenBuild}
         />
-        <RoundButton
+        <DockButton
           testId="tool-remove"
-          icon="🔨"
+          icon="remove"
+          hotkey="2"
           label="拆除（返还 30%）"
           active={tool.kind === "remove"}
           disabled={!buildable}
           onClick={() => (tool.kind === "remove" ? exitTool() : setTool({ kind: "remove" }))}
         />
-        <RoundButton
+        <DockButton
           testId="tool-redevelop"
-          icon="🏚️"
+          icon="redevelop"
+          hotkey="3"
           label="更新改造（点既有建筑）"
           active={tool.kind === "redevelop"}
           disabled={!buildable}
@@ -91,38 +109,32 @@ export default function AbilityDock({ buildOpen, onOpenBuild, onOpenPanel, panel
             tool.kind === "redevelop" ? exitTool() : setTool({ kind: "redevelop" })
           }
         />
-        <RoundButton
+        <DockButton
           testId="dock-select"
-          icon="✋"
+          icon="select"
+          hotkey="4"
           label="结束当前工具"
           active={tool.kind === "select"}
           onClick={exitTool}
         />
-        <div className="mx-1 h-10 w-px self-center bg-[var(--wb-gold-line)]" aria-hidden />
-        <RoundButton
+        <div className="mx-0.5 h-11 w-1 bg-[var(--px-ink)] opacity-35" aria-hidden />
+        <DockButton
           testId="dock-city"
-          icon="📊"
+          icon="city"
+          hotkey="5"
           label="城市面板"
           active={panelTab === "city"}
           onClick={() => onOpenPanel("city")}
         />
-        <RoundButton
+        <DockButton
           testId="dock-feed"
-          icon="💬"
+          icon="feed"
+          hotkey="6"
           label="城市动态"
           active={panelTab === "feed"}
           onClick={() => onOpenPanel("feed")}
         />
       </div>
-      <p className="pl-1 text-[11px] text-[var(--wb-ink-muted)] drop-shadow">
-        {tool.kind === "place"
-          ? "放置模式 · 左键落子，右键 / ESC 退出"
-          : tool.kind === "remove"
-            ? "拆除模式 · 点地块确认拆除"
-            : tool.kind === "redevelop"
-              ? "更新改造模式 · 点既有建筑"
-              : "点 🏗️ 选择区块，点地块放置"}
-      </p>
     </div>
   );
 }

@@ -1,19 +1,23 @@
 "use client";
 
 /**
- * 指标显示（WorldBox HUD 重构，PR-37）：
- * - `ResourcePills`：顶部资源条——5 个核心指标胶囊，变化 300ms 绿/红脉冲（14 §2.1 简化模式）；
+ * 指标显示（16 §4.4 像素风）：
+ * - `ResourcePills`：顶部资源条——5 个核心指标「物品槽」，变化时绿/红两帧闪烁（14 §2.1 简化模式）；
  * - `MetricsDetail`：右侧城市面板里的详细列表（保留人话注解）。
  * testid `metrics-panel` / `metric-*` 保留在胶囊上，供联调与 E2E 使用。
  */
 import type { MetricKey, Metrics } from "@/lib/contract";
 import { yuan } from "@/lib/api/humanize";
 import { useGame } from "@/store/game";
+import { PixelIcon } from "@/components/ui/PixelSprite";
+import type { IconName } from "@/lib/pixelArt";
 
 export interface CoreMetric {
   key: MetricKey;
   label: string;
-  icon: string;
+  icon: IconName;
+  /** 资源槽图标底色 */
+  tint: string;
   note: string;
   fmt: (m: Metrics) => string;
   goodUp: boolean;
@@ -23,7 +27,8 @@ export const CORE_METRICS: CoreMetric[] = [
   {
     key: "funds",
     label: "资金",
-    icon: "🪙",
+    icon: "coin",
+    tint: "var(--px-tint-sun)",
     note: "财政余额，别花成负数",
     fmt: (m) => yuan(m.funds),
     goodUp: true,
@@ -31,7 +36,8 @@ export const CORE_METRICS: CoreMetric[] = [
   {
     key: "population",
     label: "人口",
-    icon: "👥",
+    icon: "people",
+    tint: "var(--px-tint-blue)",
     note: "住进城里的人",
     fmt: (m) => `${m.population.toLocaleString()}`,
     goodUp: true,
@@ -39,7 +45,8 @@ export const CORE_METRICS: CoreMetric[] = [
   {
     key: "happiness",
     label: "幸福",
-    icon: "😊",
+    icon: "smile",
+    tint: "var(--px-tint-sun)",
     note: "市民满意程度，0–100",
     fmt: (m) => `${m.happiness}`,
     goodUp: true,
@@ -47,7 +54,8 @@ export const CORE_METRICS: CoreMetric[] = [
   {
     key: "avg_commute",
     label: "通勤",
-    icon: "🚌",
+    icon: "bus",
+    tint: "var(--px-tint-blue)",
     note: "平均通勤，越短越好",
     fmt: (m) => `${m.avg_commute}′`,
     goodUp: false,
@@ -55,46 +63,45 @@ export const CORE_METRICS: CoreMetric[] = [
   {
     key: "green_ratio",
     label: "绿地",
-    icon: "🌳",
+    icon: "leaf",
+    tint: "var(--px-tint-mint)",
     note: "新城区宜 ≥30%",
     fmt: (m) => `${Math.round(m.green_ratio * 100)}%`,
     goodUp: true,
   },
 ];
 
-/** 顶部资源胶囊（WorldBox 顶部资源条） */
+/** 顶部资源条：一块像素面板里并排 5 个物品槽 */
 export function ResourcePills() {
   const metrics = useGame((s) => s.metrics);
   const pulse = useGame((s) => s.pulse);
   if (!metrics) return null;
   return (
     <div
-      className="pointer-events-auto flex max-w-[min(92vw,46rem)] items-center gap-2 overflow-x-auto px-1 py-0.5 [scrollbar-width:none]"
+      className="px-panel pointer-events-auto flex max-w-[min(92vw,46rem)] items-center gap-1.5 overflow-x-auto p-1.5 [scrollbar-width:none]"
       data-testid="metrics-panel"
       role="group"
       aria-label="城市资源"
     >
-      {CORE_METRICS.map(({ key, label, icon, fmt, goodUp }) => {
+      {CORE_METRICS.map(({ key, label, icon, tint, fmt, goodUp }) => {
         const dir = pulse.dir[key];
         const good = dir ? dir > 0 === goodUp : null;
         return (
-          <span
-            key={`${key}:${dir ? pulse.token : 0}`}
-            className="wb-pill shrink-0 text-sm"
-            title={label}
-          >
-            <span aria-hidden className="text-[0.95rem] leading-none">
-              {icon}
+          <span key={`${key}:${dir ? pulse.token : 0}`} className="px-slot shrink-0" title={label}>
+            <span className="px-slot-icon" style={{ background: tint }}>
+              <PixelIcon name={icon} scale={2} />
             </span>
-            <span className="text-[11px] text-[var(--wb-ink-muted)]">{label}</span>
-            <b
-              data-testid={`metric-${key}`}
-              className={`font-bold ${
-                good === null ? "" : good ? "metric-pulse-up" : "metric-pulse-down"
-              }`}
-            >
-              {fmt(metrics)}
-            </b>
+            <span className="flex flex-col gap-0.5 leading-none">
+              <span className="text-[11px] text-[var(--px-ink-soft)]">{label}</span>
+              <b
+                data-testid={`metric-${key}`}
+                className={`text-[19px] font-semibold ${
+                  good === null ? "" : good ? "metric-pulse-up" : "metric-pulse-down"
+                }`}
+              >
+                {fmt(metrics)}
+              </b>
+            </span>
           </span>
         );
       })}
@@ -115,10 +122,10 @@ export function MetricsDetail() {
         return (
           <li
             key={`${key}:${dir ? pulse.token : 0}`}
-            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--wb-gold-line)] bg-black/15 px-2.5 py-1.5"
+            className="px-well flex items-center justify-between gap-2 px-2.5 py-1.5"
           >
-            <span className="flex items-center gap-1.5 text-xs text-[var(--wb-ink-muted)]">
-              <span aria-hidden>{icon}</span>
+            <span className="flex items-center gap-1.5 text-xs text-[var(--px-ink-soft)]">
+              <PixelIcon name={icon} scale={1} />
               {label}
               <span className="hidden text-[10px] opacity-70 sm:inline">· {note}</span>
             </span>

@@ -13,6 +13,7 @@ import {
 } from "three";
 import type { Camera } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { SCENE_COLORS, TERRAIN_COLORS } from "@/lib/palette";
 import type {
   Anchor,
   BuildingsFile,
@@ -76,15 +77,6 @@ const TERRAIN_HEIGHTS: Record<Terrain, number> = {
   occupied: 0.25,
 };
 
-const TERRAIN_COLORS: Record<Terrain, string> = {
-  flat: "#a9c795",
-  hill: "#91ad7f",
-  river: "#477f96",
-  bank: "#b9bd91",
-  forest: "#6fa679",
-  road_inherited: "#9b9f9b",
-  occupied: "#b6b2a7",
-};
 
 const BUILDING_CATEGORIES: ExistingAsset["category"][] = [
   "residential",
@@ -310,7 +302,7 @@ export function createTerrainGeometries(parcel: Parcel): TerrainGeometries {
   const base = -4;
   const solid = emptyGeometryData();
   const water = emptyGeometryData();
-  const waterColor = new Color("#5bb4cf");
+  const waterColor = new Color(SCENE_COLORS.water);
   let hasWater = false;
 
   for (let row = 0; row < size; row += 1) {

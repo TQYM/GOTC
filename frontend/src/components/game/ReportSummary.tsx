@@ -31,15 +31,15 @@ export default function ReportSummary() {
   if (phase !== "report" || !rep) return null;
   return (
     <div
-      className="absolute inset-x-0 top-16 z-10 mx-auto w-[min(28rem,calc(100%-1.5rem))] rounded-xl border border-violet-400/50 bg-bg-elev/95 p-4 shadow-2xl"
+      className="px-panel px-anim-rise absolute inset-x-0 top-[8.5rem] z-10 mx-auto w-[min(28rem,calc(100%-1.5rem))] p-4"
       data-testid="report-summary"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold">
+        <h2 className="text-lg font-normal">
           {rep.cityName ?? "城市诊断"}
         </h2>
         <span
-          className="rounded-full bg-violet-500/30 px-2 py-0.5 text-xs"
+          className="px-chip bg-[var(--px-grape)] text-white"
           data-testid="ending-label"
         >
           {ENDING_LABEL[rep.ending]}
@@ -49,9 +49,9 @@ export default function ReportSummary() {
         {(Object.keys(SCORE_LABEL) as (keyof Scores)[]).map((k) => (
           <li key={k} className="flex items-center gap-2 text-xs">
             <span className="w-16 text-fg-muted">{SCORE_LABEL[k]}</span>
-            <span className="h-2 flex-1 overflow-hidden rounded bg-line">
+            <span className="h-3 flex-1 overflow-hidden bg-[var(--px-paper-2)] shadow-[0_0_0_2px_var(--px-ink)]">
               <span
-                className="block h-full bg-violet-400"
+                className="block h-full bg-[var(--px-grape)]"
                 style={{ width: `${rep.scores[k]}%` }}
               />
             </span>
