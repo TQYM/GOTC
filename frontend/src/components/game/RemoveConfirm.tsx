@@ -14,27 +14,27 @@ export default function RemoveConfirm() {
   const spec = TILE_SPECS[req.tile.type];
   return (
     <div
-      className="absolute inset-0 z-40 grid place-items-center bg-black/40"
+      className="absolute inset-0 z-40 grid place-items-center bg-[rgba(42,35,64,0.4)]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="remove-title"
     >
       <div
-        className="w-80 rounded-xl border border-line bg-bg-elev p-5 shadow-2xl"
+        className="px-panel px-anim-rise w-80 p-5"
         data-testid="remove-confirm"
       >
-        <h2 id="remove-title" className="text-base font-semibold">
+        <h2 id="remove-title" className="text-lg font-normal">
           拆除「{spec.name}」？
         </h2>
         <p className="mt-2 text-sm text-fg-muted">
           返还约{" "}
-          <span className="font-semibold text-fg">{yuan(req.refund)}</span>
+          <span className="px-chip bg-[var(--px-sun)] text-fg">{yuan(req.refund)}</span>
           （造价的 30%），拆除后不能撤销。
         </p>
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-5 flex justify-end gap-4">
           <button
             type="button"
-            className="min-h-11 rounded-md border border-line px-4 text-sm hover:bg-line"
+            className="px-action"
             onClick={cancel}
           >
             取消
@@ -43,7 +43,7 @@ export default function RemoveConfirm() {
             type="button"
             data-testid="remove-confirm-ok"
             disabled={busy}
-            className="min-h-11 rounded-md bg-red-500 px-4 text-sm font-semibold text-white hover:bg-red-400 disabled:opacity-60"
+            className="px-action px-action-danger"
             onClick={() => void confirm()}
           >
             确认拆除

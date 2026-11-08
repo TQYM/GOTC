@@ -1,20 +1,27 @@
 /**
  * 地形层几何（11 §6.2）：整张 48×48 地面合成一个 BufferGeometry，按地形值顶点着色。
  * - 每格一个顶面四边形（高度见 TERRAIN_HEIGHT）；
- * - 相邻格高差处补竖直侧壁；棋盘外缘侧壁一直落到底座底面，形成「沙盘模型」底座；
+ * - 顶面按棋盘格交错两色（16 §3.3），出像素地砖感；
+ * - 相邻格高差处补竖直侧壁；棋盘外缘侧壁一直落到底座底面，分草皮 / 泥土 / 深层泥土三层，形成「像素浮岛」底座；
  * - 水面另出一块半透明几何（河道格）；网格线另出 LineSegments。
  */
 import * as THREE from "three";
 import type { Parcel, Terrain } from "@/lib/contract";
-import { SCENE_COLORS, TERRAIN_COLORS } from "@/lib/palette";
+import { SCENE_COLORS, TERRAIN_ALT_COLORS, TERRAIN_COLORS } from "@/lib/palette";
 import { PLINTH_BOTTOM, TERRAIN_HEIGHT, gridOf } from "./coords";
 
 const WATER_LEVEL = -1.2;
 
-function colorOf(t: Terrain): THREE.Color {
-  return new THREE.Color(
-    t === "river" ? SCENE_COLORS.riverbed : TERRAIN_COLORS[t],
-  );
+/** 底座分层：顶边草皮 → 泥土 → 深层泥土 */
+const PLINTH_BANDS: [number, string][] = [
+  [-2, SCENE_COLORS.plinthGrass],
+  [-8, SCENE_COLORS.plinth],
+  [PLINTH_BOTTOM, SCENE_COLORS.plinthDeep],
+];
+
+function colorOf(t: Terrain, alt: boolean): THREE.Color {
+  if (t === "river") return new THREE.Color(SCENE_COLORS.riverbed);
+  return new THREE.Color(alt ? TERRAIN_ALT_COLORS[t] : TERRAIN_COLORS[t]);
 }
 
 export interface TerrainGeometries {
@@ -30,11 +37,12 @@ export function buildTerrain(parcel: Parcel): TerrainGeometries {
   const col: number[] = [];
   const waterPos: number[] = [];
   const gridPos: number[] = [];
-  const plinth = new THREE.Color(SCENE_COLORS.plinth);
-  const palette = new Map<Terrain, THREE.Color>();
-  const paint = (t: Terrain) => {
-    let c = palette.get(t);
-    if (!c) palette.set(t, (c = colorOf(t)));
+  const bands = PLINTH_BANDS.map(([y, hex]) => [y, new THREE.Color(hex)] as const);
+  const palette = new Map<string, THREE.Color>();
+  const paint = (t: Terrain, alt: boolean) => {
+    const key = `${t}:${alt ? 1 : 0}`;
+    let c = palette.get(key);
+    if (!c) palette.set(key, (c = colorOf(t, alt)));
     return c;
   };
 
@@ -63,49 +71,32 @@ export function buildTerrain(parcel: Parcel): TerrainGeometries {
       const x1 = x0 + s;
       const z0 = r * s - half;
       const z1 = z0 + s;
-      const top = paint(t);
+      const top = paint(t, ((r + c) & 1) === 1);
       // 顶面（法线朝 +y：顺序 NW→SW→SE→NE）
       quad([x0, h, z0], [x0, h, z1], [x1, h, z1], [x1, h, z0], top);
 
-      // 侧壁：只有本格更高时才画，朝向低的一侧
-      const wallColor = (nh: number) =>
-        nh === PLINTH_BOTTOM ? plinth : top.clone().multiplyScalar(0.82);
+      // 侧壁：只有本格更高时才画，朝向低的一侧；外缘落到底座底面时按三层分带
+      const side = top.clone().multiplyScalar(0.82);
+      const wall = (ax: number, az: number, bx: number, bz: number, nh: number) => {
+        if (nh !== PLINTH_BOTTOM) {
+          quad([ax, h, az], [ax, nh, az], [bx, nh, bz], [bx, h, bz], side);
+          return;
+        }
+        let y = h;
+        for (const [bottom, color] of bands) {
+          if (bottom >= y) continue;
+          quad([ax, y, az], [ax, bottom, az], [bx, bottom, bz], [bx, y, bz], color);
+          y = bottom;
+        }
+      };
       const north = heightAt(r - 1, c);
-      if (north < h)
-        quad(
-          [x1, h, z0],
-          [x1, north, z0],
-          [x0, north, z0],
-          [x0, h, z0],
-          wallColor(north),
-        );
+      if (north < h) wall(x1, z0, x0, z0, north);
       const south = heightAt(r + 1, c);
-      if (south < h)
-        quad(
-          [x0, h, z1],
-          [x0, south, z1],
-          [x1, south, z1],
-          [x1, h, z1],
-          wallColor(south),
-        );
+      if (south < h) wall(x0, z1, x1, z1, south);
       const west = heightAt(r, c - 1);
-      if (west < h)
-        quad(
-          [x0, h, z0],
-          [x0, west, z0],
-          [x0, west, z1],
-          [x0, h, z1],
-          wallColor(west),
-        );
+      if (west < h) wall(x0, z0, x0, z1, west);
       const east = heightAt(r, c + 1);
-      if (east < h)
-        quad(
-          [x1, h, z1],
-          [x1, east, z1],
-          [x1, east, z0],
-          [x1, h, z0],
-          wallColor(east),
-        );
+      if (east < h) wall(x1, z1, x1, z0, east);
 
       if (t === "river") {
         waterPos.push(

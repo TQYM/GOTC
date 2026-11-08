@@ -1,11 +1,12 @@
 "use client";
 
 /**
- * CityScene3D（05 §2.3 / 11 §6）：卡通风格真 3D 沙盘。
+ * CityScene3D（05 §2.3 / 11 §6 / 16 §5）：像素小镇风格真 3D 沙盘。
  *
  * - 透视相机 + 天际线式操控（CameraRig：右键旋转、中键/WASD 平移、滚轮向光标缩放、Home 复位）；
  * - 米制局部坐标，片区中心为原点；
- * - 1 方向光 + 半球环境光，关闭色调映射（flat）保留卡通高饱和配色；
+ * - 1 方向光 + 半球环境光，关闭色调映射（flat）保留统一色板的高饱和配色；
+ * - 像素化渲染（PixelPass）：低分辨率渲染 + 最近邻放大 + 深度墨线，像素度由本端偏好控制；
  * - 桌面开阴影，触屏设备关阴影并把像素比上限压到 1.5；
  * - 只渲染契约数据（parcel + tiles[].cells），不推断任何业务规则。
  */
@@ -15,7 +16,9 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { Cell, Parcel, Tile } from "@/lib/contract";
 import { SCENE_COLORS } from "@/lib/palette";
 import CameraRig from "./CameraRig";
-import RealCityLayers from "./RealCityLayers";
+import PixelPass from "./PixelPass";
+import RealCityLayers, { LABEL_LAYER } from "./RealCityLayers";
+import { usePrefs } from "@/store/prefs";
 import { cellToWorld, gridOf, TERRAIN_HEIGHT } from "./coords";
 import {
   CellFrames,
@@ -61,6 +64,8 @@ export interface CityScene3DProps {
   cursor?: string;
   /** 值变化时相机回到默认鸟瞰 */
   resetViewSignal?: number;
+  /** 像素度（每个大像素占的 CSS 像素，0 关闭）；缺省读本端偏好 */
+  pixelScale?: number;
   /** 暴露 window.__city20Scene 供 E2E 拾取校验 */
   debugHook?: boolean;
   className?: string;
@@ -76,6 +81,15 @@ function useCoarsePointer() {
     return () => mq.removeEventListener("change", update);
   }, []);
   return coarse;
+}
+
+/** 相机同时看见场景层与地名标签层（像素化关闭时标签走默认渲染） */
+function CameraLayers() {
+  const camera = useThree((s) => s.camera);
+  useEffect(() => {
+    camera.layers.enable(LABEL_LAYER);
+  }, [camera]);
+  return null;
 }
 
 function StatsProbe({ onStats }: { onStats: (s: SceneStats) => void }) {
@@ -139,8 +153,13 @@ export default function CityScene3D({
   onEmptyClick,
   cursor,
   debugHook = false,
+  pixelScale,
   className,
 }: CityScene3DProps) {
+  const prefScale = usePrefs((s) => s.pixelScale);
+  const hydratePrefs = usePrefs((s) => s.hydrate);
+  useEffect(() => hydratePrefs(), [hydratePrefs]);
+  const pixel = pixelScale ?? prefScale ?? 0;
   const rightDown = useRef<[number, number] | null>(null);
   const coarse = useCoarsePointer();
   const shadowOn = shadows ?? !coarse;
@@ -177,6 +196,7 @@ export default function CityScene3D({
     <div
       className={`relative h-full w-full min-h-0 min-w-0 ${className ?? ""}`}
       data-testid="city-scene"
+      data-pixel-scale={pixel}
       style={cursor ? { cursor } : undefined}
       onPointerDown={(e) => {
         if (e.button === 2) rightDown.current = [e.clientX, e.clientY];
@@ -195,7 +215,7 @@ export default function CityScene3D({
       onContextMenu={(e) => e.preventDefault()}
     >
       <Canvas
-        shadows={shadowOn ? "percentage" : false}
+        shadows={shadowOn ? "basic" : false}
         dpr={[1, coarse ? 1.5 : 2]}
         camera={{ position: camPos, fov: 35, near: 10, far: extent * 8 }}
         flat
@@ -210,7 +230,7 @@ export default function CityScene3D({
           attach="fog"
           args={[SCENE_COLORS.background, extent * 2.2, extent * 5]}
         />
-        <hemisphereLight args={["#ffffff", "#c9d6b8", 1.15]} />
+        <hemisphereLight args={[SCENE_COLORS.hemiSky, SCENE_COLORS.hemiGround, 1.15]} />
         <directionalLight
           position={[extent * 0.45, extent * 0.9, extent * 0.3]}
           intensity={1.7}
@@ -259,6 +279,8 @@ export default function CityScene3D({
           home={camPos}
           resetSignal={resetViewSignal}
         />
+        <CameraLayers />
+        {pixel > 1 && <PixelPass pixelScale={pixel} />}
         {onStats && <StatsProbe onStats={onStats} />}
         {debugHook && <DebugHook parcel={parcel} />}
       </Canvas>

@@ -13,13 +13,33 @@ import {
   type SceneLabel,
 } from "@saves/lib/scene";
 import type { BuildingsFile, NetworkFile } from "@saves/lib/types";
+import { EXISTING_FACES, PX, SCENE_COLORS } from "@/lib/palette";
+import { toonMaterial } from "./toon";
 
-const EXISTING_COLORS = {
-  residential: "#e8e6e1",
-  workplace: "#d5d2cc",
-  industrial: "#c4c0ba",
-  civic: "#ddd9d1",
-} as const;
+/** 地名标签单独放在第 1 层：像素化渲染时以全分辨率叠加，保证可读（16 §5.2） */
+export const LABEL_LAYER = 1;
+
+const PIXEL_FONT = '"Pixelify Sans", "ZCOOL QingKe HuangYou", sans-serif';
+
+/**
+ * 既有建筑按面法线写顶点色（16 §3.4 / §5.1）：朝上的面写屋顶色，其余写墙色；
+ * 在 chunk 几何创建时做一次，随 chunk 缓存，合批后仍保留。
+ */
+function paintFaces(geometry: THREE.BufferGeometry, category: keyof typeof EXISTING_FACES) {
+  const faces = EXISTING_FACES[category];
+  const wall = new THREE.Color(faces.m);
+  const roof = new THREE.Color(faces.t);
+  const normal = geometry.getAttribute("normal");
+  const n = geometry.getAttribute("position").count;
+  const colors = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const c = normal && normal.getY(i) > 0.5 ? roof : wall;
+    colors[i * 3] = c.r;
+    colors[i * 3 + 1] = c.g;
+    colors[i * 3 + 2] = c.b;
+  }
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+}
 
 interface RemoteFile<T> {
   url: string | null;
@@ -95,6 +115,7 @@ function ExistingBuildings({
       let cached = geometryCache.current.get(chunk.key);
       if (!cached) {
         cached = createExistingBuildingGeometries(chunk.assets, worldSize);
+        for (const layer of cached) paintFaces(layer.geometry, layer.category);
         geometryCache.current.set(chunk.key, cached);
       }
       layers.push(cached);
@@ -113,12 +134,13 @@ function ExistingBuildings({
     for (const building of buildingsRef.current) building.geometry.dispose();
   }, []);
 
+  const material = useMemo(() => toonMaterial({ vertexColors: true }), []);
+  useEffect(() => () => material.dispose(), [material]);
+
   return (
     <group name="existing-buildings">
       {buildings.map(({ category, geometry }) => (
-        <mesh key={category} geometry={geometry} castShadow receiveShadow>
-          <meshStandardMaterial color={EXISTING_COLORS[category]} flatShading roughness={0.88} />
-        </mesh>
+        <mesh key={category} geometry={geometry} material={material} castShadow receiveShadow />
       ))}
     </group>
   );
@@ -133,13 +155,23 @@ function NetworkLayer({ file, worldSize }: { file: NetworkFile; worldSize: numbe
   return (
     <group name="existing-network">
       {geometries.roads && (
-        <mesh geometry={geometries.roads} renderOrder={2}>
-          <meshStandardMaterial color="#59636b" roughness={0.92} polygonOffset polygonOffsetFactor={-1} polygonOffsetUnits={-1} />
+        <mesh geometry={geometries.roads} renderOrder={2} receiveShadow>
+          <meshToonMaterial
+            color={SCENE_COLORS.asphalt}
+            polygonOffset
+            polygonOffsetFactor={-1}
+            polygonOffsetUnits={-1}
+          />
         </mesh>
       )}
       {geometries.rails && (
-        <mesh geometry={geometries.rails} renderOrder={3}>
-          <meshStandardMaterial color="#4f8edc" roughness={0.6} polygonOffset polygonOffsetFactor={-2} polygonOffsetUnits={-2} />
+        <mesh geometry={geometries.rails} renderOrder={3} receiveShadow>
+          <meshToonMaterial
+            color={SCENE_COLORS.rail}
+            polygonOffset
+            polygonOffsetFactor={-2}
+            polygonOffsetUnits={-2}
+          />
         </mesh>
       )}
     </group>
@@ -159,30 +191,50 @@ function LandmarkLabels({
   buildings: BuildingsFile;
   worldSize: number;
 }) {
+  // 像素字体异步加载：加载完成后重绘一次标签
+  const [fontsReady, setFontsReady] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    void document.fonts?.load(`32px ${PIXEL_FONT}`, "国贸").then(() => {
+      if (alive) setFontsReady((v) => v + 1);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const sprites = useMemo(() => {
     return createLandmarkLabelLayouts(file, buildings, worldSize).map(({ label, position }, index) => {
+      // 像素牌：纸色底 + 墨色描边 + 下方小三角（16 §5.1 第 7 条），最近邻采样保持硬边
       const canvas = document.createElement("canvas");
-      canvas.width = 512;
-      canvas.height = 128;
+      canvas.width = 256;
+      canvas.height = 72;
       const context = canvas.getContext("2d")!;
-      context.fillStyle = "rgba(20, 35, 40, .82)";
-      context.roundRect(4, 12, 504, 104, 28);
-      context.fill();
-      context.fillStyle = "#fff8dc";
-      context.font = "600 48px sans-serif";
+      context.imageSmoothingEnabled = false;
+      context.fillStyle = PX.ink;
+      context.fillRect(8, 4, 240, 52);
+      context.fillRect(116, 56, 24, 6);
+      context.fillRect(122, 62, 12, 6);
+      context.fillStyle = PX.paper;
+      context.fillRect(14, 10, 228, 40);
+      context.fillStyle = PX.ink;
+      context.font = `32px ${PIXEL_FONT}`;
       context.textAlign = "center";
       context.textBaseline = "middle";
-      context.fillText(label.name, 256, 64, 470);
+      context.fillText(label.name, 128, 31, 216);
       const texture = new THREE.CanvasTexture(canvas);
       texture.colorSpace = THREE.SRGBColorSpace;
+      texture.magFilter = THREE.NearestFilter;
+      texture.minFilter = THREE.NearestFilter;
+      texture.generateMipmaps = false;
       const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
       return {
-        key: `${label.name}-${index}`,
+        key: `${label.name}-${index}-${fontsReady}`,
         material,
         position,
       };
     });
-  }, [file, buildings, worldSize]);
+  }, [file, buildings, worldSize, fontsReady]);
   useEffect(() => () => {
     for (const sprite of sprites) {
       sprite.material.map?.dispose();
@@ -192,7 +244,14 @@ function LandmarkLabels({
   return (
     <group name="landmark-labels">
       {sprites.map((sprite) => (
-        <sprite key={sprite.key} position={sprite.position} scale={[100, 25, 1]} material={sprite.material} renderOrder={20} />
+        <sprite
+          key={sprite.key}
+          position={sprite.position}
+          scale={[96, 27, 1]}
+          material={sprite.material}
+          renderOrder={20}
+          ref={(sprite: THREE.Sprite | null) => sprite?.layers.set(LABEL_LAYER)}
+        />
       ))}
     </group>
   );

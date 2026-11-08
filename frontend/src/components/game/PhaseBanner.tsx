@@ -1,14 +1,16 @@
 "use client";
 
 /**
- * 右上时间控制区（WorldBox 重构，PR-15）：
+ * 右上时间控制区（16 §4.4 像素风，PR-15）：
  * - 阶段徽章 + 城市年份（年份在 TopBar）+ 投影进度；
- * - 圆形能力按钮：快进一年 / 推演 10 年 / 生成报告 / 请教导师 / 历史报告 / 返回建设；
+ * - 方块能力按钮（下方带小标签）：快进一年 / 推演 10 年 / 生成报告 / 请教导师 / 历史报告 / 返回建设；
  * - 只展示后端给的 phase 与 city_year，不推算、无任何倒计时；
  * - 「推演」= finalize（会锁定本局），点击前二次确认（当前 v1 后端）。
  */
 import { useEffect, useState } from "react";
 import type { GamePhase } from "@/lib/api";
+import { PixelIcon } from "@/components/ui/PixelSprite";
+import type { IconName } from "@/lib/pixelArt";
 import { useGame } from "@/store/game";
 import ReportHistory from "./ReportHistory";
 
@@ -20,10 +22,10 @@ const PHASE_LABEL: Record<GamePhase, string> = {
 };
 
 const PHASE_TONE: Record<GamePhase, string> = {
-  briefing: "text-slate-200",
-  building: "text-emerald-200",
-  projecting: "text-sky-200",
-  report: "text-violet-200",
+  briefing: "var(--px-slate)",
+  building: "var(--px-mint)",
+  projecting: "var(--px-blue)",
+  report: "var(--px-grape)",
 };
 
 const NOT_YET = "当前后端未启用此能力；请使用 saves v2 完整后端";
@@ -32,31 +34,38 @@ function RoundAction({
   testId,
   icon,
   label,
+  caption,
+  primary = false,
   disabled,
   why,
   onClick,
 }: {
   testId: string;
-  icon: string;
+  icon: IconName;
   label: string;
+  caption: string;
+  primary?: boolean;
   disabled: boolean;
   why?: string;
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      data-testid={testId}
-      aria-label={label}
-      title={disabled && why ? why : label}
-      disabled={disabled}
-      onClick={onClick}
-      className="wb-round"
-    >
-      <span className="text-xl leading-none" aria-hidden>
-        {icon}
+    <div className="flex flex-col items-center gap-2.5">
+      <button
+        type="button"
+        data-testid={testId}
+        aria-label={label}
+        title={disabled && why ? why : label}
+        disabled={disabled}
+        onClick={onClick}
+        className={`px-btn ${primary ? "px-btn-primary-tone" : ""}`}
+      >
+        <PixelIcon name={icon} scale={2} />
+      </button>
+      <span className="px-caption" aria-hidden>
+        {caption}
       </span>
-    </button>
+    </div>
   );
 }
 
@@ -106,51 +115,54 @@ export default function PhaseBanner() {
   return (
     <>
       <div
-        className="pointer-events-none absolute right-3 top-3 z-20 flex max-w-[min(20rem,46vw)] flex-col items-end gap-2"
+        className="pointer-events-none absolute right-4 top-4 z-20 flex max-w-[min(26rem,50vw)] flex-col-reverse items-end gap-3"
         data-testid="phase-banner"
       >
         <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1.5">
           <span
             data-testid="phase-label"
-            className={`wb-pill py-1 text-xs font-bold ${PHASE_TONE[phase]}`}
+            className="px-chip text-white"
+            style={{ background: PHASE_TONE[phase] }}
           >
             {PHASE_LABEL[phase]}
           </span>
           {phase === "projecting" && projection.length > 0 && (
             <span
               data-testid="projection-progress"
-              className="wb-pill py-1 text-[11px]"
+              className="px-chip gap-2 bg-[var(--px-paper)] text-[12px]"
               title={`推演至第 ${Math.max(projectionYear, firstYear - 1)} / ${lastYear} 年`}
             >
               <span className="tabular-nums">
                 {Math.max(projectionYear, firstYear - 1)}/{lastYear} 年
               </span>
-              <span className="inline-block h-1.5 w-16 overflow-hidden rounded-full bg-black/40">
+              <span className="inline-block h-2 w-16 overflow-hidden bg-[var(--px-paper-4)]">
                 <span
-                  className="block h-full rounded-full bg-sky-400 transition-[width]"
+                  className="block h-full bg-[var(--px-blue)]"
                   style={{ width: `${played * 100}%` }}
                 />
               </span>
             </span>
           )}
           {phase === "projecting" && projectionId && (
-            <span className="wb-pill py-1 text-[10px]" data-testid="projection-identity">
+            <span className="px-chip bg-[var(--px-paper)] text-[11px]" data-testid="projection-identity">
               base 第 {projectionBaseYear} 年 · seq {projectionBaseSeq}
             </span>
           )}
           {phase === "report" && cityReport?.baseYear !== undefined && (
-            <span className="wb-pill py-1 text-[10px]" data-testid="report-identity">
+            <span className="px-chip bg-[var(--px-paper)] text-[11px]" data-testid="report-identity">
               base 第 {cityReport.baseYear} 年 · seq {cityReport.baseSeq}
             </span>
           )}
         </div>
 
-        <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-2">
+        <div className="pointer-events-auto flex flex-wrap items-start justify-end gap-3">
           {building && (
             <>
               <RoundAction
                 testId="advance-year"
-                icon="⏭️"
+                icon="ff"
+                caption="快进一年"
+                primary
                 label="快进一年：收税、人口迁移、年度事件"
                 disabled={busy || !caps?.advanceYear}
                 why={NOT_YET}
@@ -158,7 +170,8 @@ export default function PhaseBanner() {
               />
               <RoundAction
                 testId="project"
-                icon="🔮"
+                icon="crystal"
+                caption="推演"
                 label={caps?.projectLocksCity ? "推演 10 年（会锁定本局）" : "只读预览未来 10 年"}
                 disabled={busy || !caps?.project}
                 why={NOT_YET}
@@ -166,7 +179,8 @@ export default function PhaseBanner() {
               />
               <RoundAction
                 testId="report"
-                icon="📋"
+                icon="report"
+                caption="报告"
                 label="生成报告：五维评分 + 规划导师诊断"
                 disabled={busy || !caps?.report}
                 why={caps?.projectLocksCity ? "当前后端版本的报告随「推演 10 年」一起生成" : NOT_YET}
@@ -174,7 +188,8 @@ export default function PhaseBanner() {
               />
               <RoundAction
                 testId="mentor"
-                icon="🎓"
+                icon="cap"
+                caption="导师"
                 label="请教导师（异步，不阻塞经营）"
                 disabled={busy || !caps?.mentor}
                 why={NOT_YET}
@@ -185,7 +200,8 @@ export default function PhaseBanner() {
           {phase !== "briefing" && (
             <RoundAction
               testId="report-history-toggle"
-              icon="🗂️"
+              icon="history"
+              caption="历史"
               label="历史城市报告（最近 20 份）"
               disabled={!caps?.reportHistory}
               why={NOT_YET}
@@ -198,7 +214,8 @@ export default function PhaseBanner() {
           {(phase === "projecting" || phase === "report") && caps && !caps.projectLocksCity && (
             <RoundAction
               testId="back-to-building"
-              icon="↩️"
+              icon="back"
+              caption="回建设"
               label="回到自由建设"
               disabled={busy}
               onClick={() => void backToBuilding()}
@@ -211,20 +228,20 @@ export default function PhaseBanner() {
 
       {confirmLock && (
         <div
-          className="pointer-events-auto fixed inset-0 z-40 grid place-items-center bg-black/45 p-4"
+          className="pointer-events-auto fixed inset-0 z-40 grid place-items-center bg-[rgba(42,35,64,0.4)] p-4"
           role="dialog"
           aria-modal="true"
           data-testid="confirm-lock"
         >
-          <div className="wb-panel w-full max-w-sm rounded-2xl p-4">
-            <p className="text-sm font-bold">推演后本局将锁定</p>
-            <p className="mt-1 text-xs text-[var(--wb-ink-muted)]">
+          <div className="px-panel px-anim-rise w-full max-w-sm p-5">
+            <p className="text-lg">推演后本局将锁定</p>
+            <p className="mt-2 text-sm leading-relaxed text-[var(--px-ink-soft)]">
               当前后端版本还没有「只读推演」，推演 10 年会直接出报告并结束建设。确定现在推演吗？
             </p>
-            <div className="mt-3 flex justify-end gap-2">
+            <div className="mt-5 flex justify-end gap-4">
               <button
                 type="button"
-                className="min-h-10 rounded-full border border-[var(--wb-gold-line)] px-4 text-sm"
+                className="px-action"
                 onClick={() => setConfirmLock(false)}
               >
                 再建一会
@@ -232,7 +249,7 @@ export default function PhaseBanner() {
               <button
                 type="button"
                 data-testid="confirm-lock-ok"
-                className="min-h-10 rounded-full bg-[var(--wb-gold)] px-4 text-sm font-bold text-[#1c1610] active:scale-95"
+                className="px-action px-action-primary"
                 onClick={() => {
                   setConfirmLock(false);
                   void project();
