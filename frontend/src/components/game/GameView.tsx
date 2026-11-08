@@ -266,6 +266,11 @@ export default function GameView({
               }}
               onEmptyClick={() => selectAt(null)}
               onRightClick={exitTool}
+              map={mapState.status === "ready" ? mapState.data : null}
+              initialPreset="cbd"
+              labelTopInset={64}
+              mapPickEnabled={tool.kind === "select"}
+              presetRequest={preset}
               debugHook={debug}
             />
           ) : (
@@ -285,6 +290,17 @@ export default function GameView({
           </div>
 
           <PhaseBanner />
+
+          {/* PR-36：全域地图数据状态 / 视角预设控制（右上，避开 InspectorPanel） */}
+          <div className="pointer-events-none absolute bottom-28 right-3 z-10 sm:bottom-auto sm:top-16">
+            <MapHud
+              state={mapState}
+              retry={retryMap}
+              onPreset={(key) =>
+                setPreset((p) => ({ key, token: (p?.token ?? 0) + 1 }))
+              }
+            />
+          </div>
 
           <div className="absolute bottom-3 left-3">
             <AbilityDock
