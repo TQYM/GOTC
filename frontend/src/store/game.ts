@@ -715,7 +715,12 @@ export const useGame = create<GameState>()((set, get) => {
             ? `释放 ${detail.cells.length} 格 · 拆迁 ${yuan(detail.demolition_cost)} · 幸福度 ${detail.happiness_delta}`
             : undefined,
         });
-        set({ selected: null });
+        // 释放掉的资产要从索引里移除：否则这些格子仍被当成既有建筑，会重复触发拆除
+        set((state) => {
+          const next = { ...state.existingAssets };
+          for (const [r, c] of asset.cells) delete next[`${r}:${c}`];
+          return { existingAssets: next, selected: null };
+        });
       } catch (e) {
         fail(e, null, () => void get().demolishExisting(anchor));
       } finally {
@@ -751,6 +756,14 @@ export const useGame = create<GameState>()((set, get) => {
             ? `释放 ${detail.cells.length} 格 · 拆迁 ${yuan(detail.demolition_cost)} · 幸福度 ${detail.happiness_delta}`
             : `资金变化 ${yuan(result.funds_after - before)}`,
         });
+        const freed = detail?.cells ?? [];
+        if (freed.length) {
+          set((state) => {
+            const next = { ...state.existingAssets };
+            for (const [r, c] of freed) delete next[`${r}:${c}`];
+            return { existingAssets: next };
+          });
+        }
       } catch (e) {
         fail(e, null, () => void get().redevelopAt(anchor));
       } finally {

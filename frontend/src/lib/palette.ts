@@ -101,6 +101,8 @@ export const EXISTING_FACES: Record<"residential" | "workplace" | "industrial" |
 /** 场景辅助色 */
 export const SCENE_COLORS = {
   background: PX.sky,
+  /** 棋盘之外的大地垫层（配合雾把地图边缘融进背景，避免"浮岛"感） */
+  outerGround: "#C3D6B8",
   /** 底座剖面：顶边草皮 / 泥土 / 深层泥土 */
   plinthGrass: "#77C25A",
   plinth: "#A8683F",

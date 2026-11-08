@@ -27,6 +27,7 @@ import type { CityApi } from "@/lib/api";
 import { SCENE_COLORS } from "@/lib/palette";
 import { checkPlacement } from "@/lib/validate";
 import { occupiedSet, tileAt, useGame } from "@/store/game";
+import { TILE_SPECS } from "@/lib/catalog";
 import { rememberRecent } from "@saves/lib/recent";
 import { ResourcePills } from "./MetricsPanel";
 import PhaseBanner from "./PhaseBanner";
@@ -41,6 +42,13 @@ import InspectorPanel from "@/components/hud/InspectorPanel";
 import NewsTicker from "@/components/hud/NewsTicker";
 import TopBar from "@/components/hud/TopBar";
 import { PixelIcon } from "@/components/ui/PixelSprite";
+
+const ASSET_FALLBACK_NAME: Record<string, string> = {
+  residential: "既有住宅",
+  workplace: "既有办公",
+  industrial: "既有工业",
+  civic: "公共服务",
+};
 
 const CityScene3D = dynamic(() => import("@/components/scene/CityScene3D"), {
   ssr: false,
@@ -90,6 +98,30 @@ export default function GameView({
   const setTool = useGame((s) => s.setTool);
   const startPlanning = useGame((s) => s.startPlanning);
   const toast = useGame((s) => s.toast);
+
+  const selected = useGame((s) => s.selected);
+  const existingAssets = useGame((s) => s.existingAssets);
+
+  /**
+   * 选中建筑时钉在屋顶上的名称牌。
+   * 特殊建筑（学校 / 医院一类的 civic、以及 150m 以上的地标）不钉：
+   * 它们已有固定地名牌和专属详情，再叠一层只会互相遮挡。
+   */
+  const selectedLabel = useMemo(() => {
+    if (!selected) return null;
+    const [r, c] = selected;
+    const tile = tileAt(tiles, selected);
+    if (tile) return { r, c, name: TILE_SPECS[tile.type].name, height: 26 };
+    const asset = existingAssets[`${r}:${c}`];
+    if (!asset) return null;
+    if (asset.category === "civic" || asset.height_m >= 150) return null;
+    return {
+      r,
+      c,
+      name: asset.name ?? ASSET_FALLBACK_NAME[asset.category] ?? "既有建筑",
+      height: asset.height_m,
+    };
+  }, [selected, tiles, existingAssets]);
 
   const [hover, setHover] = useState<Cell | null>(null);
   const [dragType, setDragType] = useState<TileType | null>(null);
@@ -279,6 +311,7 @@ export default function GameView({
               }}
               onEmptyClick={() => selectAt(null)}
               ambience={ambience}
+              selectedLabel={selectedLabel}
               onOutsideCore={() => {
                 setPanelTab(null);
                 selectAt(null);

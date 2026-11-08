@@ -98,6 +98,8 @@ export interface CityScene3DProps {
   parcelLabelsUrl?: string | null;
   /** 点到东西朝海管理范围以外 */
   onOutsideCore?: () => void;
+  /** 选中的建筑名称牌（详情卡打开时钉在建筑顶上；地标已有固定标签，这里只管普通建筑） */
+  selectedLabel?: { r: number; c: number; name: string; height?: number } | null;
   /** 街景层：像素小人与车流的规模参数（人口 / 岗位 / 拥堵 / 幸福度） */
   ambience?: {
     population: number;
@@ -167,6 +169,54 @@ function CameraEnvelope({ near, far }: { near: number; far: number }) {
     cam.far = far;
     cam.updateProjectionMatrix();
   }, [get, near, far]);
+  return null;
+}
+
+/** 选中建筑的名称牌：每帧把建筑顶点投影到屏幕，钉在 DOM 标签层上 */
+function CellBadge({
+  parcel,
+  offset,
+  spot,
+  layer,
+}: {
+  parcel: Parcel;
+  offset: [number, number, number];
+  spot: { r: number; c: number; name: string; height?: number };
+  layer: HTMLDivElement | null;
+}) {
+  const camera = useThree((s) => s.camera);
+  const size = useThree((s) => s.size);
+  const el = useRef<HTMLDivElement | null>(null);
+  const v = useRef(new THREE.Vector3());
+  const g = useMemo(() => gridOf(parcel), [parcel]);
+
+  useEffect(() => {
+    if (!layer) return;
+    const div = document.createElement("div");
+    div.className = "city20-map-label city20-cell-badge";
+    div.textContent = spot.name;
+    layer.appendChild(div);
+    el.current = div;
+    return () => {
+      div.remove();
+      el.current = null;
+    };
+  }, [layer, spot.name]);
+
+  useFrame(() => {
+    const div = el.current;
+    if (!div) return;
+    const [x, z] = cellToWorld(g, spot.r, spot.c);
+    v.current
+      .set(x + offset[0], (spot.height ?? 24) + offset[1], z + offset[2])
+      .project(camera);
+    const px = ((v.current.x + 1) / 2) * size.width;
+    const py = ((1 - v.current.y) / 2) * size.height;
+    // 在相机背后就不显示
+    div.style.display = v.current.z > 1 ? "none" : "block";
+    div.style.transform = `translate(${Math.round(px)}px, ${Math.round(py)}px) translate(-50%, -100%)`;
+  });
+
   return null;
 }
 
@@ -283,6 +333,7 @@ export default function CityScene3D({
   mapPickEnabled = true,
   parcelLabelsUrl = null,
   onOutsideCore,
+  selectedLabel = null,
   ambience = null,
   debugHook = false,
   pixelScale,
@@ -353,8 +404,10 @@ export default function CityScene3D({
     [onCellClick],
   );
 
+  // 初始机位：只框住东西朝海（约 26km 见方），不是整块 48km 棋盘，
+  // 这样开局视野里没有棋盘边缘，也看不到虚空。
   const camPos = useMemo<[number, number, number]>(
-    () => [boardExtent * 0.7, boardExtent * 0.92, boardExtent * 1.02],
+    () => [boardExtent * 0.32, boardExtent * 0.68, boardExtent * 0.50],
     [boardExtent],
   );
   const home = useMemo<[number, number, number]>(
@@ -444,7 +497,7 @@ export default function CityScene3D({
         {world ? (
           <fog attach="fog" args={[bg, 160000, 450000]} />
         ) : (
-          <fog attach="fog" args={[bg, boardExtent * 2.2, boardExtent * 5]} />
+          <fog attach="fog" args={[bg, boardExtent * 0.46, boardExtent * 1.15]} />
         )}
         <CameraEnvelope
           near={world ? 5 : 5}
@@ -494,6 +547,14 @@ export default function CityScene3D({
             topInset={labelTopInset}
           />
         )}
+        {!map && selectedLabel && (
+          <CellBadge
+            parcel={parcel}
+            offset={boardOffset}
+            spot={selectedLabel}
+            layer={labelLayer}
+          />
+        )}
         {world && map && (
           <MapPicker
             data={map}
@@ -509,6 +570,18 @@ export default function CityScene3D({
             index={picked.building}
             surface={world.surface}
           />
+        )}
+
+        {/* 棋盘之外的大地：一圈低饱和草原色垫底，配合雾把边界糊掉，避免"浮岛+虚空" */}
+        {!world && (
+          <mesh
+            position={[0, -1.2, 0]}
+            rotation-x={-Math.PI / 2}
+            receiveShadow={false}
+          >
+            <planeGeometry args={[boardExtent * 6, boardExtent * 6]} />
+            <meshLambertMaterial color={SCENE_COLORS.outerGround} />
+          </mesh>
         )}
 
         {/* 可玩沙盘：全域模式下平移到 CBD 片区，拾取在沙盘局部坐标内完成 */}
@@ -559,15 +632,18 @@ export default function CityScene3D({
           extent={extent}
           home={home}
           resetSignal={resetViewSignal}
-          distanceRange={world ? [400, 260000] : undefined}
+          distanceRange={
+            world ? [400, 260000] : [boardExtent * 0.09, boardExtent * 0.95]
+          }
           bounds={
             core
               ? [core.halfX, core.halfZ]
               : world
                 ? [world.frame.width / 2, world.frame.height / 2]
-                : undefined
+                : [boardExtent * 0.34, boardExtent * 0.34]
           }
           boundsCenter={core ? [core.centerX, core.centerZ] : undefined}
+          maxPolarAngle={world ? 1.32 : 1.10}
           fly={fly}
         />
         {pixel > 1 && <PixelPass pixelScale={pixel} />}

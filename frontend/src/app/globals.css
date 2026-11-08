@@ -487,3 +487,19 @@ body {
 .px-canvas canvas {
   image-rendering: pixelated;
 }
+
+/* 选中建筑的名称牌：钉在屋顶上，深底金字，比地名牌更醒目 */
+.city20-cell-badge {
+  display: none;
+  padding: 3px 9px;
+  border: 2px solid var(--px-ink, #2a2340);
+  border-radius: 0;
+  background: var(--px-ink, #2a2340);
+  color: var(--px-sun, #ffd447);
+  font-size: 13px;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  box-shadow: 3px 3px 0 rgba(42, 35, 64, 0.35);
+  z-index: 2;
+}

@@ -44,6 +44,8 @@ export interface CameraRigProps {
   bounds?: [number, number];
   /** 视点可平移范围的矩形中心（缺省原点；全域模式用于把视角锁在东西朝海） */
   boundsCenter?: [number, number];
+  /** 最大俯仰角（弧度）：越小越限制平视，避免露出地图边缘外的虚空 */
+  maxPolarAngle?: number;
   /** 飞行请求：token 变化时在 duration ms 内平滑飞到目标机位（0 = 瞬移） */
   fly?: {
     pos: [number, number, number];
@@ -63,6 +65,7 @@ export default function CameraRig({
   distanceRange,
   bounds,
   boundsCenter,
+  maxPolarAngle = 1.32,
   fly = null,
 }: CameraRigProps) {
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
@@ -232,7 +235,7 @@ export default function CameraRig({
       minDistance={distanceRange ? distanceRange[0] : extent * 0.08}
       maxDistance={distanceRange ? distanceRange[1] : extent * 2.4}
       minPolarAngle={0.15}
-      maxPolarAngle={1.32}
+      maxPolarAngle={maxPolarAngle}
       screenSpacePanning={false}
       mouseButtons={{ MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE }}
       touches={{ ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE }}
