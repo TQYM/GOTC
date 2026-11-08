@@ -74,9 +74,10 @@ export function TerrainLayer({
     [geo],
   );
 
-  // 地面拾取：命中顶面直接换算；命中侧壁时沿法线反向退半米，归属到更高的那一格
+  // 地面拾取：先把世界命中点换回沙盘局部坐标（全域模式下沙盘被平移到 CBD 片区），
+  // 命中顶面直接换算；命中侧壁时沿法线反向退半米，归属到更高的那一格
   const cellOf = (e: ThreeEvent<PointerEvent | MouseEvent>): Cell | null => {
-    const p = e.point.clone();
+    const p = e.object.worldToLocal(e.point.clone());
     const n = e.face?.normal;
     if (n && Math.abs(n.y) < 0.5) p.addScaledVector(n, -0.5);
     return worldToCell(g, p.x, p.z);

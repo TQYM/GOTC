@@ -17,7 +17,9 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import type { GhostSpec } from "@/components/scene/CityScene3D";
+import type { GhostSpec, PresetKey } from "@/components/scene/CityScene3D";
+import MapHud from "@/components/scene/map/MapHud";
+import { useFullMap } from "@/lib/map/loader";
 import type { Cell, TileType } from "@/lib/contract";
 import type { CityApi } from "@/lib/api";
 import { SCENE_COLORS } from "@/lib/palette";
@@ -77,6 +79,20 @@ export default function GameView({
   const [hover, setHover] = useState<Cell | null>(null);
   const [dragType, setDragType] = useState<TileType | null>(null);
   const sceneBox = useRef<HTMLDivElement>(null);
+  // PR-36：北京全域地图作为背景，可玩沙盘嵌在 CBD 片区（v1 沙盘规格 48×48 @50m）
+  const { state: mapState, retry: retryMap } = useFullMap(
+    parcel
+      ? {
+          size: parcel.size,
+          cell_size_m: parcel.cell_size_m,
+          origin: parcel.origin,
+        }
+      : { size: 48, cell_size_m: 50 },
+  );
+  const [preset, setPreset] = useState<{
+    key: PresetKey;
+    token: number;
+  } | null>(null);
 
   useEffect(() => {
     void init(api, id);
@@ -239,6 +255,11 @@ export default function GameView({
                   else if (tool.kind === "redevelop") void redevelopAt(cell);
                 }}
                 onRightClick={exitTool}
+                map={mapState.status === "ready" ? mapState.data : null}
+                initialPreset="cbd"
+                labelTopInset={64}
+                mapPickEnabled={tool.kind === "select"}
+                presetRequest={preset}
                 debugHook={debug}
               />
             ) : (
@@ -248,7 +269,11 @@ export default function GameView({
             )}
 
             {placeType === "util_bridge" && (
-              <div className="absolute bottom-3 right-3 z-10 flex rounded-md border border-line bg-bg-elev/95 p-1 text-xs" role="group" aria-label="桥梁方向">
+              <div
+                className="absolute bottom-3 right-3 z-10 flex rounded-md border border-line bg-bg-elev/95 p-1 text-xs"
+                role="group"
+                aria-label="桥梁方向"
+              >
                 {(["horizontal", "vertical"] as const).map((value) => (
                   <button
                     key={value}
@@ -263,6 +288,15 @@ export default function GameView({
                 ))}
               </div>
             )}
+            <div className="pointer-events-none absolute bottom-12 left-3 z-10 sm:bottom-auto sm:left-auto sm:right-3 sm:top-16">
+              <MapHud
+                state={mapState}
+                retry={retryMap}
+                onPreset={(key) =>
+                  setPreset((p) => ({ key, token: (p?.token ?? 0) + 1 }))
+                }
+              />
+            </div>
 
             {tool.kind === "place" && check && !check.ok && (
               <div
@@ -279,8 +313,12 @@ export default function GameView({
             )}
             {tool.kind !== "select" && (
               <div className="pointer-events-none absolute bottom-3 left-3 rounded bg-black/50 px-2 py-1 text-xs text-white">
-                {tool.kind === "remove" ? "拆除模式" : tool.kind === "redevelop" ? "更新改造模式" : "放置模式"} · 右键 / ESC
-                退出
+                {tool.kind === "remove"
+                  ? "拆除模式"
+                  : tool.kind === "redevelop"
+                    ? "更新改造模式"
+                    : "放置模式"}{" "}
+                · 右键 / ESC 退出
               </div>
             )}
 

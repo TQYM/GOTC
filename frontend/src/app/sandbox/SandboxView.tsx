@@ -6,7 +6,13 @@
  */
 import dynamic from "next/dynamic";
 import { useCallback, useMemo, useState } from "react";
-import type { GhostSpec, SceneStats } from "@/components/scene/CityScene3D";
+import type {
+  GhostSpec,
+  PresetKey,
+  SceneStats,
+} from "@/components/scene/CityScene3D";
+import MapHud from "@/components/scene/map/MapHud";
+import { useFullMap } from "@/lib/map/loader";
 import { footprintCells } from "@/components/scene/coords";
 import type { Cell, Terrain, TileType } from "@/lib/contract";
 import { TILE_ORDER, TILE_SPECS, type TileCategory } from "@/lib/catalog";
@@ -53,6 +59,16 @@ export default function SandboxView() {
   const [hover, setHover] = useState<Cell | null>(null);
   const [stats, setStats] = useState<SceneStats | null>(null);
   const [resetView, setResetView] = useState(0);
+  // PR-36：北京全域地图（静态数据包直读，worker 预处理）
+  const { state: mapState, retry: retryMap } = useFullMap({
+    size: parcel.size,
+    cell_size_m: parcel.cell_size_m,
+    origin: parcel.origin,
+  });
+  const [preset, setPreset] = useState<{
+    key: PresetKey;
+    token: number;
+  } | null>(null);
 
   const shownTiles = useMemo(
     () => (showTiles ? tiles : []),
@@ -94,8 +110,11 @@ export default function SandboxView() {
 
   return (
     <main className="flex h-screen flex-col gap-3 p-3 lg:flex-row">
-      <section className="min-h-[60vh] flex-1 overflow-hidden rounded-lg border border-line lg:min-h-0">
+      <section className="relative min-h-[60vh] flex-1 overflow-hidden rounded-lg border border-line lg:min-h-0">
         <CityScene3D
+          map={mapState.status === "ready" ? mapState.data : null}
+          initialPreset="all"
+          presetRequest={preset}
           parcel={parcel}
           tiles={shownTiles}
           ghost={ghost}
@@ -105,6 +124,15 @@ export default function SandboxView() {
           resetViewSignal={resetView}
           debugHook
         />
+        <div className="pointer-events-none absolute left-3 top-3 z-10">
+          <MapHud
+            state={mapState}
+            retry={retryMap}
+            onPreset={(key) =>
+              setPreset((p) => ({ key, token: (p?.token ?? 0) + 1 }))
+            }
+          />
+        </div>
       </section>
 
       <aside className="flex w-full shrink-0 flex-col gap-4 overflow-y-auto rounded-lg border border-line bg-bg-elev p-4 text-sm lg:w-72">

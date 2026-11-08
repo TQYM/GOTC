@@ -94,3 +94,18 @@ body {
     animation: none;
   }
 }
+
+/* 全域地图地名标签（DOM billboard，PR-36） */
+.city20-map-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: none;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  will-change: transform;
+}

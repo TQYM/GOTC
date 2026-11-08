@@ -11,7 +11,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "predev": "node scripts/sync-map-data.mjs",
+    "prebuild": "node scripts/sync-map-data.mjs",
+    "prestart": "node scripts/sync-map-data.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
