@@ -104,3 +104,5 @@ pytest -q
 ## 许可证
 
 [Apache License 2.0](LICENSE)
+
+模型、数据、图片与第三方代码的来源声明及项目局限见 [docs/SOURCES.md](docs/SOURCES.md)。地理数据 © OpenStreetMap contributors（ODbL 1.0）。
