@@ -4,6 +4,7 @@
  * 后端缓冲溢出时会先推快照（phase_change + tick），前端照常消费即可。
  */
 import type { ConnState, StreamEvent, StreamHandlers } from "@/lib/api/cityApi";
+import { withBase } from "@/lib/api/base";
 
 export const RECONNECT_MS = 2000;
 
@@ -58,7 +59,7 @@ export function openEventStream(
     ctrl = new AbortController();
     setConn(downSince === null ? "connecting" : "down");
     try {
-      const res = await fetch(url, {
+      const res = await fetch(withBase(url), {
         headers: {
           Accept: "text/event-stream",
           ...(lastId ? { "Last-Event-ID": lastId } : {}),

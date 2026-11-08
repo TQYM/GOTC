@@ -40,7 +40,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="CITY20 Backend", version=settings.app_version, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    # 演示部署：APK（capacitor://localhost）与 Web 都要能直连；不带 cookie，放开 origin 即可
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
