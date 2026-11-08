@@ -14,7 +14,8 @@ import { mapPointToCell } from "@saves/lib/cityModel";
 import type { FullMapData } from "@/lib/map/types";
 import type { CameraShot } from "@/lib/map/presets";
 import { cellTopHeights, marchHeightfield } from "@/lib/map/pick";
-import { worldToMap, type Surface } from "../coords";
+import { mapFrame, worldToMap, type Surface } from "../coords";
+import { inCoreArea } from "@/lib/map/coreArea";
 
 export interface MapPick {
   /** 建筑表下标（只在命中建筑时回调，空地回调 null） */
@@ -30,11 +31,14 @@ export default function MapPicker({
   surface,
   onFly,
   onPick,
+  onOutOfBounds,
 }: {
   data: FullMapData;
   surface: Surface;
   onFly: (shot: CameraShot) => void;
   onPick?: (pick: MapPick | null) => void;
+  /** 点到东西朝海以外的区域（管理范围外） */
+  onOutOfBounds?: () => void;
 }) {
   const gl = useThree((s) => s.gl);
   const camera = useThree((s) => s.camera);
@@ -101,6 +105,11 @@ export default function MapPicker({
       if (!p) return onPick(null);
       const [x, y] = worldToMap(surface.f, p.x, p.z);
       if (inBoard(x, y)) return onPick(null);
+      // 管理范围只到东西朝海：范围外只提示，不弹建筑详情
+      if (!inCoreArea(mapFrame(data.grid), x, y)) {
+        onOutOfBounds?.();
+        return onPick(null);
+      }
       const cell = mapPointToCell(x, y, rows, cols, cell_m);
       if (!cell) return onPick(null);
       const building = data.cellIndex[cell[0] * cols + cell[1]];
@@ -114,7 +123,7 @@ export default function MapPicker({
       el.removeEventListener("pointerdown", onDown);
       el.removeEventListener("pointerup", onUp);
     };
-  }, [gl, camera, controls, surface, data, tops, onFly, onPick]);
+  }, [gl, camera, controls, surface, data, tops, onFly, onPick, onOutOfBounds]);
 
   return null;
 }

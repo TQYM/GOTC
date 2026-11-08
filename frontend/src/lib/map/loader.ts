@@ -86,6 +86,7 @@ function load(board: Board): Promise<FullMapData> {
 }
 
 export type MapState =
+  | { status: "off" }
   | { status: "loading"; progress: MapProgress }
   | { status: "ready"; data: FullMapData }
   | { status: "error"; message: string };
@@ -96,7 +97,10 @@ const INITIAL: MapState = {
 };
 
 /** 加载全域地图；board 为可玩沙盘规格（null = 不放沙盘） */
-export function useFullMap(board: Board): {
+export function useFullMap(
+  board: Board,
+  enabled = true,
+): {
   state: MapState;
   retry: () => void;
 } {
@@ -108,6 +112,7 @@ export function useFullMap(board: Board): {
   const [oe, on] = board ? boardOriginUtm(board) : [0, 0];
 
   useEffect(() => {
+    if (!enabled) return;
     let alive = true;
     const b =
       size !== undefined && cell !== undefined
@@ -126,10 +131,10 @@ export function useFullMap(board: Board): {
       alive = false;
       set!.delete(onProg);
     };
-  }, [key, size, cell, oe, on, attempt]);
+  }, [key, size, cell, oe, on, attempt, enabled]);
 
   return {
-    state,
+    state: enabled ? state : ({ status: "off" } as const),
     retry: () => {
       setState(INITIAL);
       setAttempt((n) => n + 1);

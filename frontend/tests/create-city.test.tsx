@@ -21,7 +21,7 @@ describe("创建与加入城市", () => {
     fireEvent.change(screen.getByRole("textbox", { name: /城市名称/ }), { target: { value: "朝阳试验城" } });
     fireEvent.click(screen.getByTestId("create-city"));
     await waitFor(() => expect(mocks.create).toHaveBeenCalledWith({
-      name: "朝阳试验城", parcelId: "beijing_cbd", seed: undefined,
+      name: "朝阳试验城", parcelId: "beijing_core", seed: undefined,
     }));
     expect(mocks.push).toHaveBeenCalledWith("/game?session=REAL2026");
   });

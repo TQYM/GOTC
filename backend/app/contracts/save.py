@@ -15,7 +15,7 @@ from app.contracts.tile import PlaceRequest, Tile
 class CreateSaveRequest(BaseModel):
     seed: int | None = None
     name: str | None = Field(default=None, max_length=40)
-    parcel_id: Literal["beijing_cbd", "sandbox"] = "beijing_cbd"
+    parcel_id: Literal["beijing_cbd", "beijing_core", "sandbox"] = "beijing_cbd"
 
 
 class SaveState(BaseModel):

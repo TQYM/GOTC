@@ -1,0 +1,4 @@
+beijing_core 数据包
+
+几何与地名：© OpenStreetMap contributors，ODbL 1.0（https://www.openstreetmap.org/copyright）
+由 data/parcels/beijing_full 裁剪聚合而来，仅供 CITY20 演示使用。

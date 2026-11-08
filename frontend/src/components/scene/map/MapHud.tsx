@@ -17,6 +17,7 @@ export default function MapHud({
   retry: () => void;
   onPreset: (key: PresetKey) => void;
 }) {
+  if (state.status === "off") return null;
   if (state.status === "loading") {
     const p = state.progress;
     return (

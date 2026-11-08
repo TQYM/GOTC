@@ -14,7 +14,7 @@ import {
 export default function CreateCity() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [parcelId, setParcelId] = useState<"beijing_cbd" | "sandbox">("beijing_cbd");
+  const [parcelId, setParcelId] = useState<"beijing_core" | "beijing_cbd" | "sandbox">("beijing_core");
   const [seed, setSeed] = useState("");
   const [code, setCode] = useState("");
   const [recent, setRecent] = useState<RecentCity[]>([]);
@@ -66,13 +66,35 @@ export default function CreateCity() {
             className="min-h-11 rounded-xl border border-[var(--wb-gold-line)] bg-black/25 px-3 text-[var(--wb-ink)] placeholder:text-[var(--wb-ink-muted)] focus:outline-none focus:border-[var(--wb-gold)]"
           />
         </label>
-        <div className="flex flex-wrap gap-4 text-sm">
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
           <label className="flex items-center gap-2">
-            <input type="radio" checked={parcelId === "beijing_cbd"} onChange={() => setParcelId("beijing_cbd")} />
-            北京 CBD 真实片区
+            <input
+              type="radio"
+              name="parcel"
+              data-testid="parcel-core"
+              checked={parcelId === "beijing_core"}
+              onChange={() => setParcelId("beijing_core")}
+            />
+            东西朝海 · 全域 48km
           </label>
           <label className="flex items-center gap-2">
-            <input type="radio" checked={parcelId === "sandbox"} onChange={() => setParcelId("sandbox")} />
+            <input
+              type="radio"
+              name="parcel"
+              data-testid="parcel-cbd"
+              checked={parcelId === "beijing_cbd"}
+              onChange={() => setParcelId("beijing_cbd")}
+            />
+            朝阳 CBD · 精细 2.4km
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="parcel"
+              data-testid="parcel-sandbox"
+              checked={parcelId === "sandbox"}
+              onChange={() => setParcelId("sandbox")}
+            />
             确定性练习沙盒
           </label>
         </div>

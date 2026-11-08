@@ -2,18 +2,21 @@
  * 预设导航（全景 / CBD / 故宫 / 鸟巢 / 乡村 / 西山），机位沿用 tools/preview/beijing.html，换算到以地图中心为原点的世界坐标。
  */
 import { mapFrame, mapToWorld, type Surface } from "@/components/scene/coords";
+import { coreRectWorld } from "./coreArea";
 import type { FullMapData } from "./types";
 
 export type PresetKey =
   "all" | "cbd" | "gugong" | "niaochao" | "village" | "mountain";
 
+/**
+ * 管理范围是东西朝海，预设只给出核心区内的四个机位；
+ * village / mountain 保留 key 供历史链接与测试使用，但不再出现在按钮里。
+ */
 export const PRESETS: { key: PresetKey; label: string }[] = [
-  { key: "all", label: "全景" },
+  { key: "all", label: "东西朝海" },
   { key: "cbd", label: "CBD" },
   { key: "gugong", label: "故宫" },
   { key: "niaochao", label: "鸟巢" },
-  { key: "village", label: "乡村" },
-  { key: "mountain", label: "西山" },
 ];
 
 export interface CameraShot {
@@ -40,8 +43,15 @@ export function presetShot(
     return { pos: [wx + dx, g + dh, wz + dz], target: [wx, g + th, wz] };
   };
   switch (key) {
-    case "all":
-      return { pos: [0, 185000, 165000], target: [0, 0, 12000] };
+    case "all": {
+      // 核心区全景：从东西朝海上空向南俯瞰，48km 见方刚好铺满视野
+      const core = coreRectWorld(f);
+      const span = Math.max(core.halfX, core.halfZ) * 2;
+      return {
+        pos: [core.centerX, span * 1.15, core.centerZ + span * 1.25],
+        target: [core.centerX, 0, core.centerZ - span * 0.08],
+      };
+    }
     case "mountain":
       return { pos: [-45000, 22000, -30000], target: [-55000, 800, -45000] };
     case "village":

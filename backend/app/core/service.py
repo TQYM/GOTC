@@ -107,9 +107,11 @@ class SaveService:
     async def create(self, request: CreateSaveRequest) -> SaveState:
         code = await self._new_city_code()
         save_id = "sav_" + secrets.token_hex(8)
-        name = (request.name or "").strip() or (
-            "朝阳 CBD 更新计划" if request.parcel_id == "beijing_cbd" else "我的沙盒城市"
-        )
+        default_names = {
+            "beijing_cbd": "朝阳 CBD 更新计划",
+            "beijing_core": "东西朝海城市更新",
+        }
+        name = (request.name or "").strip() or default_names.get(request.parcel_id, "我的沙盒城市")
         state = load_city(
             save_id=save_id,
             city_code=code,

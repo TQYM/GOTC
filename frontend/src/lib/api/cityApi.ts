@@ -63,7 +63,7 @@ export interface PlaceInput {
 
 export interface CreateCityInput {
   name?: string;
-  parcelId?: "beijing_cbd" | "sandbox";
+  parcelId?: "beijing_cbd" | "beijing_core" | "sandbox";
   seed?: number;
 }
 

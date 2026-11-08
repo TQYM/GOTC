@@ -67,6 +67,14 @@ export default function GameView({
   const tiles = useGame((s) => s.tiles);
   const redevelopedAssetIds = useGame((s) => s.redevelopedAssetIds);
   const funds = useGame((s) => s.metrics?.funds ?? null);
+  const population = useGame((s) => s.metrics?.population ?? 0);
+  const jobs = useGame((s) => s.metrics?.jobs ?? 0);
+  const congestion = useGame((s) => s.metrics?.congestion ?? 0);
+  const happiness = useGame((s) => s.metrics?.happiness ?? 0);
+  const ambience = useMemo(
+    () => ({ population, jobs, congestion, happiness }),
+    [population, jobs, congestion, happiness],
+  );
   const phase = useGame((s) => s.phase);
   const tool = useGame((s) => s.tool);
   const busy = useGame((s) => s.busy);
@@ -80,6 +88,7 @@ export default function GameView({
   const cancelRemove = useGame((s) => s.cancelRemove);
   const setTool = useGame((s) => s.setTool);
   const startPlanning = useGame((s) => s.startPlanning);
+  const toast = useGame((s) => s.toast);
 
   const [hover, setHover] = useState<Cell | null>(null);
   const [dragType, setDragType] = useState<TileType | null>(null);
@@ -87,6 +96,8 @@ export default function GameView({
   const [panelTab, setPanelTab] = useState<"city" | "feed" | null>(null);
   const sceneBox = useRef<HTMLDivElement>(null);
   // PR-36：北京全域地图作为背景，可玩沙盘嵌在 CBD 片区（v1 沙盘规格 48×48 @50m）
+  // 东西朝海棋盘本身已覆盖 48km 全域，不再叠加全域地图层（会与 400m 棋盘地形重叠）
+  const withWorldMap = !parcel || parcel.parcel_id !== "beijing_core";
   const { state: mapState, retry: retryMap } = useFullMap(
     parcel
       ? {
@@ -95,6 +106,7 @@ export default function GameView({
           origin: parcel.origin,
         }
       : { size: 48, cell_size_m: 50 },
+    withWorldMap,
   );
   const [preset, setPreset] = useState<{
     key: PresetKey;
@@ -265,8 +277,23 @@ export default function GameView({
                 }
               }}
               onEmptyClick={() => selectAt(null)}
+              ambience={ambience}
+              onOutsideCore={() => {
+                setPanelTab(null);
+                selectAt(null);
+                toast({
+                  title: "超出管理范围",
+                  hint: "你只负责东西朝海（东城、西城、朝阳、海淀）的更新。",
+                  tone: "info",
+                });
+              }}
               onRightClick={exitTool}
-              map={mapState.status === "ready" ? mapState.data : null}
+              map={withWorldMap && mapState.status === "ready" ? mapState.data : null}
+              parcelLabelsUrl={
+                !withWorldMap && parcel
+                  ? `/static/parcels/${parcel.parcel_id}/labels.json`
+                  : null
+              }
               initialPreset="cbd"
               labelTopInset={64}
               mapPickEnabled={tool.kind === "select"}
@@ -293,6 +320,7 @@ export default function GameView({
 
           {/* PR-36：全域地图数据状态 / 视角预设控制（右上，避开 InspectorPanel） */}
           <div className="pointer-events-none absolute bottom-28 right-3 z-10 sm:bottom-auto sm:top-16">
+            {withWorldMap && (
             <MapHud
               state={mapState}
               retry={retryMap}
@@ -300,6 +328,7 @@ export default function GameView({
                 setPreset((p) => ({ key, token: (p?.token ?? 0) + 1 }))
               }
             />
+            )}
           </div>
 
           <div className="absolute bottom-3 left-3">

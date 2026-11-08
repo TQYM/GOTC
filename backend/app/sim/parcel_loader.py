@@ -18,16 +18,17 @@ def load_parcel(
 ) -> tuple[Parcel, dict[str, ExistingAsset]]:
     if parcel_id == "sandbox":
         return generate_parcel(seed if seed is not None else secrets.randbits(31), config), {}
-    if parcel_id != "beijing_cbd":
-        raise GameError(ErrorCode.INVALID_PAYLOAD, "未知 parcel_id", {"parcel_id": parcel_id})
     path = Path(data_dir) / parcel_id
+    if not (path / "parcel.json").is_file():
+        raise GameError(ErrorCode.INVALID_PAYLOAD, "未知 parcel_id", {"parcel_id": parcel_id})
     try:
         parcel = Parcel.model_validate(json.loads((path / "parcel.json").read_text("utf-8")))
         raw_buildings = json.loads((path / "buildings.json").read_text("utf-8"))
+        raw_chunks = raw_buildings.get("chunks")
+        if raw_chunks is None:
+            raw_chunks = {"flat": raw_buildings.get("buildings", [])}
         assets = [
-            ExistingAsset.model_validate(item)
-            for chunk in raw_buildings.get("chunks", {}).values()
-            for item in chunk
+            ExistingAsset.model_validate(item) for chunk in raw_chunks.values() for item in chunk
         ]
     except (OSError, ValueError) as exc:
         raise GameError(

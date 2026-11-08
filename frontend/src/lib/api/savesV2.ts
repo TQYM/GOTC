@@ -93,7 +93,7 @@ export function createSavesV2Api(): CityApi {
 
     async create(input?: number | CreateCityInput) {
       const options: CreateCityInput = typeof input === "number" ? { seed: input, parcelId: "sandbox" } : input ?? {};
-      const parcelId = options.parcelId ?? "beijing_cbd";
+      const parcelId = options.parcelId ?? "beijing_core";
       const state = await request<SaveState>("POST", "/api/saves", {
         name: options.name || undefined,
         parcel_id: parcelId,

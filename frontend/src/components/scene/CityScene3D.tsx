@@ -17,6 +17,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { Cell, Parcel, Tile } from "@/lib/contract";
 import type { FullMapData } from "@/lib/map/types";
 import { presetShot, type CameraShot, type PresetKey } from "@/lib/map/presets";
+import { coreRectWorld } from "@/lib/map/coreArea";
 import { SCENE_COLORS } from "@/lib/palette";
 import CameraRig from "./CameraRig";
 import RealCityLayers from "./RealCityLayers";
@@ -39,6 +40,8 @@ import {
   TileLayer,
   type GhostSpec,
 } from "./layers";
+import AmbientTraffic from "./AmbientTraffic";
+import ParcelLabels from "./ParcelLabels";
 import MapLayers from "./map/MapLayers";
 import MapLabels from "./map/MapLabels";
 import MapPicker, { type MapPick } from "./map/MapPicker";
@@ -89,6 +92,17 @@ export interface CityScene3DProps {
   labelTopInset?: number;
   /** 是否允许单击全域地图上的建筑弹出信息面板（放置 / 拆除模式下关闭） */
   mapPickEnabled?: boolean;
+  /** 沙盘自己的地名（东西朝海等大棋盘的 labels.json URL） */
+  parcelLabelsUrl?: string | null;
+  /** 点到东西朝海管理范围以外 */
+  onOutsideCore?: () => void;
+  /** 街景层：像素小人与车流的规模参数（人口 / 岗位 / 拥堵 / 幸福度） */
+  ambience?: {
+    population: number;
+    jobs: number;
+    congestion: number;
+    happiness: number;
+  } | null;
   /** 暴露 window.__city20Scene 供 E2E 拾取校验 */
   debugHook?: boolean;
   className?: string;
@@ -263,6 +277,9 @@ export default function CityScene3D({
   presetRequest = null,
   labelTopInset = 0,
   mapPickEnabled = true,
+  parcelLabelsUrl = null,
+  onOutsideCore,
+  ambience = null,
   debugHook = false,
   className,
 }: CityScene3DProps) {
@@ -370,6 +387,9 @@ export default function CityScene3D({
     [flyTo],
   );
 
+  // 管理范围（东西朝海）：视角与操作都不越出这块矩形
+  const core = useMemo(() => (world ? coreRectWorld(world.frame) : null), [world]);
+
   const shadowCam = boardExtent * 0.62;
   const bg = world ? "#e8f1f6" : SCENE_COLORS.background;
 
@@ -455,12 +475,22 @@ export default function CityScene3D({
             topInset={labelTopInset}
           />
         )}
+        {!map && parcelLabelsUrl && (
+          <ParcelLabels
+            url={parcelLabelsUrl}
+            worldSize={boardExtent}
+            offset={boardOffset}
+            layer={labelLayer}
+            topInset={labelTopInset}
+          />
+        )}
         {world && map && (
           <MapPicker
             data={map}
             surface={world.surface}
             onFly={onDoubleFly}
             onPick={mapPickEnabled ? onMapPick : undefined}
+            onOutOfBounds={onOutsideCore}
           />
         )}
         {world && map && picked && picked.building >= 0 && (
@@ -491,6 +521,19 @@ export default function CityScene3D({
             <OccupiedLayer parcel={parcel} />
           )}
           <TileLayer parcel={parcel} tiles={tiles} />
+          {ambience && networkUrl && (
+            <AmbientTraffic
+              worldSize={boardExtent}
+              networkUrl={networkUrl}
+              cellSize={parcel.cell_size_m}
+              tiles={tiles}
+              population={ambience.population}
+              jobs={ambience.jobs}
+              congestion={ambience.congestion}
+              happiness={ambience.happiness}
+              scale={Math.min(4, Math.max(1, boardExtent / 2400))}
+            />
+          )}
           <HoverFrame parcel={parcel} cell={ghost || overlay ? null : hover} />
           <GhostLayer parcel={parcel} ghost={ghost} />
           {overlay && (
@@ -508,8 +551,13 @@ export default function CityScene3D({
           resetSignal={resetViewSignal}
           distanceRange={world ? [400, 260000] : undefined}
           bounds={
-            world ? [world.frame.width / 2, world.frame.height / 2] : undefined
+            core
+              ? [core.halfX, core.halfZ]
+              : world
+                ? [world.frame.width / 2, world.frame.height / 2]
+                : undefined
           }
+          boundsCenter={core ? [core.centerX, core.centerZ] : undefined}
           fly={fly}
         />
         {onStats && <StatsProbe onStats={onStats} />}

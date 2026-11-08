@@ -1,5 +1,6 @@
 import {
   Box3,
+  BoxGeometry,
   BufferGeometry,
   Color,
   ExtrudeGeometry,
@@ -362,6 +363,14 @@ function existingAssetHeight(asset: ExistingAsset): number {
   return Number.isFinite(asset.height_m) && asset.height_m > 0 ? asset.height_m : fallbackHeight;
 }
 
+/**
+ * 真实楼高按世界尺度放大：48km 棋盘上 30m 住宅只有 0.06% 屏高，完全看不见。
+ * 2.4km 的 CBD 沙盘保持真实比例（1 倍），大棋盘按 worldSize/8000 放大（48km → 6 倍）。
+ */
+export function heightExaggeration(worldSize: number): number {
+  return Math.max(1, worldSize / 8000);
+}
+
 /** Keep chunk identity so expensive extrusion can be deferred until a chunk is visible. */
 export function createExistingAssetChunks(
   file: BuildingsFile,
@@ -382,7 +391,7 @@ export function createExistingAssetChunks(
     let maxHeight = 0;
 
     for (const asset of assets) {
-      maxHeight = Math.max(maxHeight, existingAssetHeight(asset));
+      maxHeight = Math.max(maxHeight, existingAssetHeight(asset) * heightExaggeration(worldSize));
       for (const footprintPoint of footprintPoints(asset)) {
         point.set(footprintPoint.x - half, baseY, half - footprintPoint.y);
         bounds.expandByPoint(point);
@@ -421,22 +430,46 @@ export function createExistingBuildingGeometries(
   const half = worldSize / 2;
   const result: ExistingBuildingGeometry[] = [];
 
+  // 大棋盘（>10km）两万栋真实建筑：挤出多边形会把三角面推到 2M+，改用包围盒体块（12 面/栋）
+  const lowPoly = worldSize > 10000;
+  const baseY = terrainHeight("occupied") + 0.03;
+  const heightScale = heightExaggeration(worldSize);
+
   for (const category of BUILDING_CATEGORIES) {
-    const temporary: ExtrudeGeometry[] = [];
+    const temporary: BufferGeometry[] = [];
     try {
       for (const asset of assets) {
         if (asset.category !== category) continue;
         const points = footprintPoints(asset);
         if (points.length < 3) continue;
+        const h = existingAssetHeight(asset) * heightScale;
+        if (lowPoly) {
+          let minX = Infinity;
+          let maxX = -Infinity;
+          let minY = Infinity;
+          let maxY = -Infinity;
+          for (const point of points) {
+            if (point.x < minX) minX = point.x;
+            if (point.x > maxX) maxX = point.x;
+            if (point.y < minY) minY = point.y;
+            if (point.y > maxY) maxY = point.y;
+          }
+          const w = Math.max(3, maxX - minX);
+          const d = Math.max(3, maxY - minY);
+          const box = new BoxGeometry(w, h, d);
+          box.translate((minX + maxX) / 2 - half, baseY + h / 2, half - (minY + maxY) / 2);
+          temporary.push(box);
+          continue;
+        }
         const geometry = new ExtrudeGeometry(new Shape(points), {
-          depth: existingAssetHeight(asset),
+          depth: h,
           bevelEnabled: false,
           steps: 1,
           curveSegments: 1,
         });
         // Shape x/y are east/north; extrusion z becomes world up.
         geometry.rotateX(-Math.PI / 2);
-        geometry.translate(-half, terrainHeight("occupied") + 0.03, half);
+        geometry.translate(-half, baseY, half);
         temporary.push(geometry);
       }
 
