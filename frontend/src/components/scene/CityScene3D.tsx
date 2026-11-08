@@ -12,6 +12,8 @@
  * - 只渲染契约数据（parcel + tiles[].cells），放置 / 拆除接口不变，坐标换算统一走 coords.ts。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+const EMPTY_CELLS: Set<string> = new Set();
 import * as THREE from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import type { Cell, Parcel, Tile } from "@/lib/contract";
@@ -39,6 +41,7 @@ import {
   HoverFrame,
   OccupiedLayer,
   TerrainLayer,
+  BuildableLayer,
   TileLayer,
   type GhostSpec,
 } from "./layers";
@@ -104,6 +107,10 @@ export interface CityScene3DProps {
   onViewTarget?: (x: number, z: number) => void;
   /** 建造成功后飞过去看一眼（token 变化触发） */
   focusRequest?: { r: number; c: number; token: number } | null;
+  /** 建造模式下高亮可建空地 */
+  showBuildable?: boolean;
+  /** 既有建筑占用的格子（`r:c`），用于排除可建格 */
+  existingCells?: Set<string>;
   /** 街景层：像素小人与车流的规模参数（人口 / 岗位 / 拥堵 / 幸福度） */
   ambience?: {
     population: number;
@@ -344,6 +351,8 @@ export default function CityScene3D({
   selectedLabel = null,
   onViewTarget,
   focusRequest,
+  showBuildable,
+  existingCells,
   ambience = null,
   debugHook = false,
   pixelScale,
@@ -640,6 +649,13 @@ export default function CityScene3D({
             <OccupiedLayer parcel={parcel} />
           )}
           <TileLayer parcel={parcel} tiles={tiles} />
+          {showBuildable ? (
+            <BuildableLayer
+              parcel={parcel}
+              tiles={tiles}
+              existing={existingCells ?? EMPTY_CELLS}
+            />
+          ) : null}
           {ambience && networkUrl && (
             <AmbientTraffic
               worldSize={boardExtent}

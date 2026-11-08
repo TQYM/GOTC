@@ -172,6 +172,10 @@ export default function GameView({
   }, [parcelLabelsUrl]);
 
   const focus = useGame((s) => s.focus);
+  const existingCellKeys = useMemo(
+    () => new Set(Object.keys(existingAssets ?? {})),
+    [existingAssets],
+  );
   const onViewTarget = useCallback(
     (x: number, z: number) => {
       if (!districtAnchors?.length || !parcel) return;
@@ -355,6 +359,8 @@ export default function GameView({
               parcel={parcel}
               tiles={tiles}
               focusRequest={focus}
+              showBuildable={buildOpen || tool.kind === "place"}
+              existingCells={existingCellKeys}
               redevelopedAssetIds={redevelopedAssetIds}
               buildingsUrl={parcel.buildings_url}
               networkUrl={parcel.network_url}

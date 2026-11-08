@@ -497,3 +497,64 @@ export function CellFrames({
     />
   );
 }
+
+
+/** 可建空地高亮：建造模式下把能落的格子铺一层淡绿，解决"全城都是楼、找不到空地" */
+export function BuildableLayer({
+  parcel,
+  tiles,
+  existing,
+}: {
+  parcel: Parcel;
+  tiles: Tile[];
+  existing: Set<string>;
+}) {
+  const material = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: "#3f8f4f",
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+      }),
+    [],
+  );
+  const cells = useMemo(() => {
+    const occ = new Set<string>();
+    for (const t of tiles) for (const [r, c] of t.cells) occ.add(`${r}:${c}`);
+    const out: [number, number][] = [];
+    for (let r = 0; r < parcel.size; r++) {
+      for (let c = 0; c < parcel.size; c++) {
+        const key = `${r}:${c}`;
+        if (parcel.terrain[r]?.[c] !== "flat") continue;
+        if (occ.has(key) || existing.has(key)) continue;
+        out.push([r, c]);
+      }
+    }
+    return out;
+  }, [parcel, tiles, existing]);
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const geometry = useMemo(() => {
+    const g = new THREE.PlaneGeometry(1, 1);
+    g.rotateX(-Math.PI / 2);
+    return g;
+  }, []);
+  useLayoutEffect(() => {
+    const mesh = ref.current;
+    if (!mesh) return;
+    const g = gridOf(parcel);
+    const size = parcel.cell_size_m * 0.82;
+    cells.forEach(([r, c], i) => {
+      const [x, z] = cellToWorld(g, r, c);
+      tmp.position.set(x, 3, z);
+      tmp.rotation.set(0, 0, 0);
+      tmp.scale.set(size, 1, size);
+      tmp.updateMatrix();
+      mesh.setMatrixAt(i, tmp.matrix);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.computeBoundingSphere();
+  }, [cells, parcel]);
+  if (cells.length === 0) return null;
+  return <instancedMesh ref={ref} args={[geometry, material, cells.length]} renderOrder={1} />;
+}
