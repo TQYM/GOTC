@@ -102,6 +102,8 @@ export interface CityScene3DProps {
   selectedLabel?: { r: number; c: number; name: string; height?: number } | null;
   /** 视野中心（世界坐标）变化：HUD 用它在左上角显示"当前在哪个区" */
   onViewTarget?: (x: number, z: number) => void;
+  /** 建造成功后飞过去看一眼（token 变化触发） */
+  focusRequest?: { r: number; c: number; token: number } | null;
   /** 街景层：像素小人与车流的规模参数（人口 / 岗位 / 拥堵 / 幸福度） */
   ambience?: {
     population: number;
@@ -341,6 +343,7 @@ export default function CityScene3D({
   onOutsideCore,
   selectedLabel = null,
   onViewTarget,
+  focusRequest,
   ambience = null,
   debugHook = false,
   pixelScale,
@@ -463,6 +466,20 @@ export default function CityScene3D({
     (shot: CameraShot) => flyTo(shot, 1200),
     [flyTo],
   );
+
+  // 建造成功后把镜头拉到新楼前，否则 48km 视角下 1 格的楼根本看不见
+  const gridForFocus = useMemo(() => (parcel ? gridOf(parcel) : null), [parcel]);
+  useEffect(() => {
+    if (!focusRequest || !gridForFocus) return;
+    const [x, z] = cellToWorld(gridForFocus, focusRequest.r, focusRequest.c);
+    const span = boardExtent * 0.05;
+    const t = setTimeout(
+      () => flyTo({ pos: [x + span, span * 0.9, z + span], target: [x, 0, z] }, 900),
+      0,
+    );
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest?.token]);
 
   // 管理范围（东西朝海）：视角与操作都不越出这块矩形
   const core = useMemo(() => (world ? coreRectWorld(world.frame) : null), [world]);

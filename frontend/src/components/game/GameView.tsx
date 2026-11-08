@@ -171,6 +171,7 @@ export default function GameView({
     };
   }, [parcelLabelsUrl]);
 
+  const focus = useGame((s) => s.focus);
   const onViewTarget = useCallback(
     (x: number, z: number) => {
       if (!districtAnchors?.length || !parcel) return;
@@ -353,6 +354,7 @@ export default function GameView({
             <CityScene3D
               parcel={parcel}
               tiles={tiles}
+              focusRequest={focus}
               redevelopedAssetIds={redevelopedAssetIds}
               buildingsUrl={parcel.buildings_url}
               networkUrl={parcel.network_url}

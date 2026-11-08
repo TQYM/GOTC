@@ -10,6 +10,7 @@ import * as THREE from "three";
 import type { ThreeEvent } from "@react-three/fiber";
 import type { Cell, Parcel, Tile, TileType } from "@/lib/contract";
 import { EXISTING_FACES, SCENE_COLORS } from "@/lib/palette";
+import { heightExaggeration } from "@saves/lib/scene";
 import {
   TERRAIN_HEIGHT,
   cellToWorld,
@@ -235,9 +236,11 @@ function setTileMatrix(
   tile: Pick<Tile, "type" | "cells" | "orientation">,
 ) {
   const t = tileTransform(gridOf(parcel), parcel, tile);
+  // 与既有建筑同一套高度夸张，否则 48km 棋盘上新建的楼只是一层贴地的皮，看不见
+  const exagg = heightExaggeration(parcel.size * parcel.cell_size_m);
   tmp.position.set(t.x, t.base, t.z);
   tmp.rotation.set(0, t.vertical ? Math.PI / 2 : 0, 0);
-  tmp.scale.set(tile.type === "util_bridge" ? t.span : 1, 1, 1);
+  tmp.scale.set(tile.type === "util_bridge" ? t.span : 1, exagg, 1);
   tmp.updateMatrix();
   mesh.setMatrixAt(i, tmp.matrix);
 }

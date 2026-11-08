@@ -111,6 +111,8 @@ interface GameState {
   selected: Cell | null;
   /** 既有建筑索引（"r:c" → asset），来自数据包 buildings.json，用于点选详情与拆除 */
   existingAssets: Record<string, ExistingAsset>;
+  /** 建造成功后请求相机飞过去（token 变化触发） */
+  focus: { r: number; c: number; token: number } | null;
   /** 已应用的最大推送 id：阶段类事件按 id 单调前进，乱序/重放的旧事件被忽略 */
   phaseEventId: number;
   lastEventId: number;
@@ -288,6 +290,7 @@ export const useGame = create<GameState>()((set, get) => {
     bridgeOrientation: "horizontal",
     selected: null,
     existingAssets: {},
+    focus: null,
     phaseEventId: -1,
     lastEventId: -1,
     conn: "connecting",
@@ -658,6 +661,7 @@ export const useGame = create<GameState>()((set, get) => {
           set((s) => ({ tiles: [...s.tiles, r.tile] }));
           applyMetrics(r.metrics);
         }
+        set({ focus: { r: anchor[0], c: anchor[1], token: Date.now() } });
         get().toast({
           tone: "ok",
           title: `${TILE_SPECS[type].name}建好了`,
@@ -813,10 +817,16 @@ export const useGame = create<GameState>()((set, get) => {
     },
 
     requestRemoveAt(cell) {
-      const { parcel, tiles, busy } = get();
+      const { parcel, tiles, busy, existingAssets } = get();
       if (!parcel || busy) return;
       const tile = tileAt(tiles, cell);
       if (!tile) {
+        // 地图上的真实建筑不是玩家 tile，走二级卡片的「拆除」入口
+        const asset = existingAssets[`${cell[0]}:${cell[1]}`];
+        if (asset) {
+          set({ confirmRemove: null, selected: cell });
+          return;
+        }
         get().toast({ tone: "info", title: "这里没有可以拆的建筑" });
         return;
       }
