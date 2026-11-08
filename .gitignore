@@ -85,3 +85,4 @@ pelican-*
 
 # 本地构建产物（APK 不入库）
 dist/
+docs/video/
