@@ -19,6 +19,7 @@ import {
   type SceneLabel,
 } from "@saves/lib/scene";
 import type { BuildingsFile, NetworkFile } from "@saves/lib/types";
+import { withBase } from "@/lib/api/base";
 import { EXISTING_FACES, PX, SCENE_COLORS } from "@/lib/palette";
 import { toonMaterial } from "./toon";
 
@@ -118,7 +119,8 @@ function useRemoteFile<T>(url: string | null): RemoteFile<T> {
   useEffect(() => {
     const controller = new AbortController();
     if (!url) return () => controller.abort();
-    void fetch(url, { signal: controller.signal })
+    // 后端返回的是 /static/... 这种相对路径；静态包（APK / 本地 HTML）里后端不在同源，必须拼 API_BASE
+    void fetch(withBase(url), { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json() as Promise<T>;
