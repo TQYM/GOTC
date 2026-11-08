@@ -38,12 +38,29 @@ export interface CameraRigProps {
   home: [number, number, number];
   /** 值变化时回到默认鸟瞰（供页面上的「回到全景」按钮使用） */
   resetSignal?: number;
+  /** 缩放距离范围（米）；全域地图 500m–200km，滚轮为乘法缩放（对数尺度） */
+  distanceRange?: [number, number];
+  /** 视点可平移范围（世界坐标半宽 [x, z]），缺省为 extent × 0.6 */
+  bounds?: [number, number];
+  /** 飞行请求：token 变化时在 duration ms 内平滑飞到目标机位（0 = 瞬移） */
+  fly?: {
+    pos: [number, number, number];
+    target: [number, number, number];
+    token: number;
+    duration: number;
+  } | null;
 }
+
+const ease = (t: number) =>
+  t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 
 export default function CameraRig({
   extent,
   home,
   resetSignal = 0,
+  distanceRange,
+  bounds,
+  fly = null,
 }: CameraRigProps) {
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
   const camera = useThree((s) => s.camera);
@@ -95,6 +112,56 @@ export default function CameraRig({
     };
   }, [resetView]);
 
+  // 平滑飞行（预设导航 / 双击飞抵）：位置与视点同时插值，玩家一拖拽就中止
+  const flight = useRef<{
+    from: THREE.Vector3;
+    to: THREE.Vector3;
+    tFrom: THREE.Vector3;
+    tTo: THREE.Vector3;
+    start: number;
+    duration: number;
+  } | null>(null);
+  useEffect(() => {
+    const c = controls.current;
+    if (!fly || !c) return;
+    const to = new THREE.Vector3(...fly.pos);
+    const tTo = new THREE.Vector3(...fly.target);
+    if (fly.duration <= 0) {
+      c.enableDamping = false;
+      c.update();
+      c.object.position.copy(to);
+      c.target.copy(tTo);
+      c.update();
+      c.enableDamping = true;
+      flight.current = null;
+      return;
+    }
+    flight.current = {
+      from: c.object.position.clone(),
+      to,
+      tFrom: c.target.clone(),
+      tTo,
+      start: performance.now(),
+      duration: fly.duration,
+    };
+    const cancel = () => (flight.current = null);
+    c.addEventListener("start", cancel);
+    return () => c.removeEventListener("start", cancel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fly?.token]);
+
+  useFrame(() => {
+    const f = flight.current;
+    const c = controls.current;
+    if (!f || !c) return;
+    const t = Math.min(1, (performance.now() - f.start) / f.duration);
+    const k = ease(t);
+    c.object.position.lerpVectors(f.from, f.to, k);
+    c.target.lerpVectors(f.tFrom, f.tTo, k);
+    c.update();
+    if (t >= 1) flight.current = null;
+  });
+
   const fwd = useRef(new THREE.Vector3());
   const right = useRef(new THREE.Vector3());
   const move = useRef(new THREE.Vector3());
@@ -119,10 +186,10 @@ export default function CameraRig({
       .copy(fwd.current)
       .multiplyScalar(f * speed)
       .addScaledVector(right.current, r * speed);
-    // 视点中心不离开沙盘太远
-    const lim = extent * 0.6;
-    const nx = THREE.MathUtils.clamp(c.target.x + move.current.x, -lim, lim);
-    const nz = THREE.MathUtils.clamp(c.target.z + move.current.z, -lim, lim);
+    // 视点中心不离开地图 / 沙盘太远
+    const [limX, limZ] = bounds ?? [extent * 0.6, extent * 0.6];
+    const nx = THREE.MathUtils.clamp(c.target.x + move.current.x, -limX, limX);
+    const nz = THREE.MathUtils.clamp(c.target.z + move.current.z, -limZ, limZ);
     move.current.set(nx - c.target.x, 0, nz - c.target.z);
     c.target.add(move.current);
     camera.position.add(move.current);
@@ -137,8 +204,8 @@ export default function CameraRig({
       enableDamping
       dampingFactor={0.12}
       zoomToCursor
-      minDistance={extent * 0.08}
-      maxDistance={extent * 2.4}
+      minDistance={distanceRange ? distanceRange[0] : extent * 0.08}
+      maxDistance={distanceRange ? distanceRange[1] : extent * 2.4}
       minPolarAngle={0.15}
       maxPolarAngle={1.32}
       screenSpacePanning={false}

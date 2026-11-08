@@ -1,0 +1,2 @@
+# 由 scripts/sync-map-data.mjs 从 ../data/parcels 同步，不入库
+/public/data/

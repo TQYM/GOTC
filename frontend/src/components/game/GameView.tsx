@@ -19,7 +19,9 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import type { GhostSpec } from "@/components/scene/CityScene3D";
+import type { GhostSpec, PresetKey } from "@/components/scene/CityScene3D";
+import MapHud from "@/components/scene/map/MapHud";
+import { useFullMap } from "@/lib/map/loader";
 import type { Cell, TileType } from "@/lib/contract";
 import type { CityApi } from "@/lib/api";
 import { SCENE_COLORS } from "@/lib/palette";
@@ -84,6 +86,20 @@ export default function GameView({
   const [buildOpen, setBuildOpen] = useState(false);
   const [panelTab, setPanelTab] = useState<"city" | "feed" | null>(null);
   const sceneBox = useRef<HTMLDivElement>(null);
+  // PR-36：北京全域地图作为背景，可玩沙盘嵌在 CBD 片区（v1 沙盘规格 48×48 @50m）
+  const { state: mapState, retry: retryMap } = useFullMap(
+    parcel
+      ? {
+          size: parcel.size,
+          cell_size_m: parcel.cell_size_m,
+          origin: parcel.origin,
+        }
+      : { size: 48, cell_size_m: 50 },
+  );
+  const [preset, setPreset] = useState<{
+    key: PresetKey;
+    token: number;
+  } | null>(null);
 
   useEffect(() => {
     void init(api, id);
