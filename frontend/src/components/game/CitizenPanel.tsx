@@ -1,0 +1,106 @@
+"use client";
+
+import { useGame } from "@/store/game";
+
+const AGE_LABELS: Record<string, string> = {
+  child: "儿童",
+  teen: "青少年",
+  young: "青年",
+  adult: "中年",
+  senior: "老年",
+  elder: "高龄",
+};
+const EDU_LABELS: Record<string, string> = {
+  none: "未受教育",
+  primary: "小学",
+  secondary: "中学",
+  university: "大学",
+};
+
+export function CitizenPanel() {
+  const citizens = useGame((s) => s.citizens);
+  const open = useGame((s) => s.citizenPanelOpen);
+  const toggle = useGame((s) => s.toggleCitizenPanel);
+
+  if (!citizens) return null;
+  const totalAge = Object.values(citizens.age_dist).reduce((a, b) => a + b, 0) || 1;
+  const totalEdu = Object.values(citizens.education_dist).reduce((a, b) => a + b, 0) || 1;
+
+  return (
+    <div className="pointer-events-auto w-72 rounded-xl border border-white/10 bg-slate-900/85 text-slate-100 shadow-xl backdrop-blur">
+      <button
+        type="button"
+        onClick={toggle}
+        className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium"
+      >
+        <span>市民 {citizens.population.toLocaleString()}</span>
+        <span className="text-slate-400">{open ? "收起" : "展开"}</span>
+      </button>
+      {open ? (
+        <div className="space-y-2 border-t border-white/10 px-3 py-2 text-[11px]">
+          <div className="grid grid-cols-3 gap-1 text-center">
+            <div>
+              <div className="text-slate-400">平均年龄</div>
+              <div className="text-sm">{citizens.avg_age.toFixed(1)}</div>
+            </div>
+            <div>
+              <div className="text-slate-400">就业率</div>
+              <div className="text-sm">{(citizens.employment_rate * 100).toFixed(0)}%</div>
+            </div>
+            <div>
+              <div className="text-slate-400">通勤</div>
+              <div className="text-sm">{citizens.avg_commute.toFixed(0)}m</div>
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 text-slate-400">年龄结构</div>
+            <div className="flex h-2 overflow-hidden rounded bg-slate-700">
+              {Object.entries(citizens.age_dist).map(([key, value]) => (
+                <div
+                  key={key}
+                  title={`${AGE_LABELS[key] ?? key} ${value}`}
+                  style={{ width: `${(value / totalAge) * 100}%` }}
+                  className={
+                    key === "child"
+                      ? "bg-emerald-400"
+                      : key === "teen"
+                        ? "bg-sky-400"
+                        : key === "young"
+                          ? "bg-amber-400"
+                          : key === "adult"
+                            ? "bg-violet-400"
+                            : "bg-slate-400"
+                  }
+                />
+              ))}
+            </div>
+          </div>
+          <div>
+            <div className="mb-1 text-slate-400">教育结构</div>
+            <div className="flex h-2 overflow-hidden rounded bg-slate-700">
+              {Object.entries(citizens.education_dist).map(([key, value]) => (
+                <div
+                  key={key}
+                  title={`${EDU_LABELS[key] ?? key} ${value}`}
+                  style={{ width: `${(value / totalEdu) * 100}%` }}
+                  className={
+                    key === "university"
+                      ? "bg-emerald-400"
+                      : key === "secondary"
+                        ? "bg-sky-400"
+                        : key === "primary"
+                          ? "bg-amber-400"
+                          : "bg-slate-500"
+                  }
+                />
+              ))}
+            </div>
+          </div>
+          <div className="text-[10px] text-slate-500">
+            抽样 {citizens.agents} 名代理 · 每人代表 {citizens.scale.toFixed(1)} 人
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}

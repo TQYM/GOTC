@@ -1,4 +1,5 @@
 import type { PlaceResult } from "@/lib/contract";
+import type { LoanResult, TaxResult } from "./cityApi";
 import type {
   OperationResult,
   ProjectionResult,
@@ -11,6 +12,7 @@ import type {
   CityApi,
   CitySnapshot,
   CreateCityInput,
+  SimTickEvent,
   StreamEvent,
 } from "./cityApi";
 
@@ -117,6 +119,10 @@ export function createSavesV2Api(): CityApi {
       return { ...result, tile: result.tile } as PlaceResult;
     },
 
+    async zone(id, input) {
+      return operation(id, "zone", { ...input });
+    },
+
     async remove(id, tileId) {
       const result = await operation(id, "remove", { tile_id: tileId });
       if (!result.tile) throw new Error("remove 响应缺少被拆除 tile");
@@ -130,6 +136,10 @@ export function createSavesV2Api(): CityApi {
     async advanceYear(id) {
       const result = await operation(id, "advance", {});
       return { cityYear: result.city_year, metrics: result.metrics, phase: "building", operation: result };
+    },
+
+    async setSpeed(id, speed) {
+      return request<SimTickEvent>("POST", `${base(id)}/speed`, { speed });
     },
 
     async project(id) {
@@ -166,6 +176,82 @@ export function createSavesV2Api(): CityApi {
     // v2 没有 backToBuilding REST；仅由 store 切换本端视图。
     async backToBuilding() {
       return { phase: "building" };
+    },
+
+    async setCityPolicy(id, policy, enabled) {
+      return request<OperationResult>("POST", `${base(id)}/policy`, {
+        policy,
+        enabled,
+        client_op_id: crypto.randomUUID(),
+      });
+    },
+
+    async createDistrict(id, name, anchor, rows, cols) {
+    return request("POST", `${base(id)}/district`, { name, anchor, rows, cols, client_op_id: crypto.randomUUID() });
+  },
+  async renameTile(id: string, tileId: string, name: string | null) {
+    return request("POST", `${base(id)}/rename`, {
+      tile_id: tileId,
+      name,
+      client_op_id: crypto.randomUUID(),
+    });
+  },
+
+  async relocateTile(id: string, tileId: string, anchor: [number, number]) {
+    return request("POST", `${base(id)}/relocate`, {
+      tile_id: tileId,
+      anchor,
+      client_op_id: crypto.randomUUID(),
+    });
+  },
+
+  async setHistorical(id: string, tileId: string, historical: boolean) {
+    return request("POST", `${base(id)}/historical`, {
+      tile_id: tileId,
+      historical,
+      client_op_id: crypto.randomUUID(),
+    });
+  },
+
+  async setDistrictPolicy(id, did, policy, enabled) {
+    return request("POST", `${base(id)}/district/policy`, {
+      did, policy, enabled, client_op_id: crypto.randomUUID(),
+    });
+  },
+  async createTransitLine(id, input) {
+    return request("POST", `${base(id)}/transit`, {
+      name: input.name,
+      kind: input.kind,
+      stops: input.stops,
+      color: input.color ?? "#3D8BFF",
+      client_op_id: crypto.randomUUID(),
+    });
+  },
+  async addTransitStop(id, lid, tileId) {
+    return request("POST", `${base(id)}/transit/stop`, {
+      lid, tile_id: tileId, client_op_id: crypto.randomUUID(),
+    });
+  },
+  async setTransitPrice(id, lid, price) {
+    return request("POST", `${base(id)}/transit/price`, {
+      lid, price, client_op_id: crypto.randomUUID(),
+    });
+  },
+  async deleteTransitLine(id, lid) {
+    return request("POST", `${base(id)}/transit/${lid}/delete`, {
+      lid, client_op_id: crypto.randomUUID(),
+    });
+  },
+  async setTaxRate(id, service, rate) {
+      return request("POST", `${base(id)}/tax`, { service, rate });
+    },
+
+    async takeLoan(id, amount, months = 60, rateBp = 500) {
+      return request("POST", `${base(id)}/loan`, {
+        amount,
+        months,
+        rate_bp: rateBp,
+      });
     },
 
     subscribe(id, handlers) {

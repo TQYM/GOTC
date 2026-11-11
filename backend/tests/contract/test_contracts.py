@@ -133,8 +133,9 @@ class TestTile:
         assert tile.type is TileType.RES_MID
         assert tile.anchor == [12, 7]
 
-    def test_all_14_tile_types_exist(self):
-        assert len(TileType) == 14
+    def test_all_tile_types_exist(self):
+        # 14 种基础区块 + 城市大道 / 城市高速（C:S 的道路等级）
+        assert len(TileType) == 22
 
     def test_anchor_must_be_coord(self):
         bad = make_tile_json()

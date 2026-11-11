@@ -33,9 +33,21 @@ import { TILE_SPECS } from "@/lib/catalog";
 import { rememberRecent } from "@saves/lib/recent";
 import { ResourcePills } from "./MetricsPanel";
 import PhaseBanner from "./PhaseBanner";
+import DemandPanel from "./DemandPanel";
+import SpeedControl from "./SpeedControl";
+import { WeatherBadge } from "./WeatherBadge";
+import { TileActions } from "./TileActions";
+
+
+
+
+import { MilestoneBar } from "./MilestoneBar";
+import { InfoViewBar } from "./InfoViewBar";
 import ReportSummary from "./ReportSummary";
 import RemoveConfirm from "./RemoveConfirm";
 import Toasts from "./Toasts";
+import { SideDock } from "./SideDock";
+import { TutorialOverlay } from "./TutorialOverlay";
 import TileSheet from "@/components/hud/TileSheet";
 import { TileCardFace } from "./ToolBar";
 import AbilityDock from "@/components/hud/AbilityDock";
@@ -414,11 +426,20 @@ export default function GameView({
           <div className="absolute left-1/2 top-4 hidden -translate-x-1/2 lg:block">
             <ResourcePills />
           </div>
+          <div className="absolute left-1/2 top-[4.75rem] hidden -translate-x-1/2 lg:block">
+            <SpeedControl />
+        <div className="absolute bottom-24 right-4">
+          <TileActions />
+        </div>
+        <div className="absolute left-1/2 top-[12.5rem] -translate-x-1/2">
+          <WeatherBadge />
+        </div>
+          </div>
 
           <PhaseBanner />
 
           {/* PR-36：全域地图数据状态 / 视角预设控制（右上，避开 InspectorPanel） */}
-          <div className="pointer-events-none absolute bottom-28 right-3 z-10 sm:bottom-auto sm:top-16">
+          <div className="pointer-events-none absolute bottom-28 right-3 z-10 sm:bottom-auto sm:top-36">
             {withWorldMap && (
             <MapHud
               state={mapState}
@@ -442,6 +463,18 @@ export default function GameView({
           <div className="absolute bottom-[10.5rem] left-4">
             <NewsTicker onOpenFeed={() => setPanelTab("feed")} />
           </div>
+
+          <div className="absolute bottom-[13.5rem] left-20">
+            <DemandPanel />
+          </div>
+
+          <SideDock />
+
+          <div className="absolute bottom-[13.5rem] right-4">
+            <InfoViewBar />
+          </div>
+
+        <MilestoneBar />
 
           {panelTab && (
             <div className="absolute bottom-4 right-4 top-[8.5rem] z-20 w-[min(23rem,88vw)]">
@@ -492,6 +525,7 @@ export default function GameView({
 
           <ReportSummary />
           <Toasts />
+      <TutorialOverlay />
           <TileSheet />
 
           {phase === "briefing" && parcel && (

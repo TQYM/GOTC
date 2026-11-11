@@ -5,9 +5,18 @@ import json
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, Request
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 from app.contracts.save import (
+    HistoricalRequest,
+    RelocateRequest,
+    RenameRequest,
+    CityPolicyRequest,
+    TransitDeleteRequest,
+    TransitLineRequest,
+    TransitPriceRequest,
+    TransitStopRequest,
     CreateSaveRequest,
     MentorAccepted,
     OperationRequest,
@@ -19,6 +28,9 @@ from app.contracts.save import (
     ReportResult,
     SavePlaceRequest,
     SaveRemoveRequest,
+    DistrictPolicyRequest,
+    DistrictRequest,
+    ZoneRequest,
     SaveState,
 )
 from app.core.service import SaveRuntime, SaveService
@@ -26,6 +38,27 @@ from app.core.service import SaveRuntime, SaveService
 router = APIRouter(prefix="/api/saves", tags=["saves"])
 SSE_HEARTBEAT_SEC = 15.0
 service = SaveService.from_settings()
+
+
+class SpeedRequest(BaseModel):
+    """速度档：0 暂停 / 1 1x / 2 2x / 3 3x（实际 4x）。"""
+
+    speed: int = Field(ge=0, le=3)
+
+
+class TaxRequest(BaseModel):
+    """税率（百分点，C:S 区间 1..29）。"""
+
+    service: str
+    rate: int = Field(ge=1, le=29)
+
+
+class LoanRequest(BaseModel):
+    """贷款：本金 / 期数 / 年化基点。"""
+
+    amount: int = Field(ge=10_000, le=20_000_000)
+    months: int = Field(default=60, ge=12, le=120)
+    rate_bp: int = Field(default=500, ge=0, le=3000)
 
 
 def get_service() -> SaveService:
@@ -59,6 +92,7 @@ async def start_save(
     return await svc.start(city_code)
 
 
+
 @router.post("/{city_code}/place", response_model=OperationResult)
 async def place(
     city_code: str, body: SavePlaceRequest,
@@ -69,6 +103,128 @@ async def place(
         payload["orientation"] = body.orientation
     return await svc.apply(
         city_code, "place", client_op_id=body.client_op_id, payload=payload
+    )
+
+
+@router.post("/{city_code}/zone", response_model=OperationResult)
+async def zone(
+    city_code: str, body: ZoneRequest,
+    svc: Annotated[SaveService, Depends(get_service)]
+) -> OperationResult:
+    return await svc.zone(
+        city_code,
+        tile_type=body.type.value,
+        anchor=body.anchor,
+        rows=body.rows,
+        cols=body.cols,
+        client_op_id=body.client_op_id,
+    )
+
+
+@router.post("/{city_code}/rename")
+async def rename_tile(city_code: str, req: RenameRequest) -> OperationResult:
+    return await service.rename_tile(
+        city_code, tile_id=req.tile_id, name=req.name, client_op_id=req.client_op_id
+    )
+
+
+@router.post("/{city_code}/relocate")
+async def relocate_tile(city_code: str, req: RelocateRequest) -> OperationResult:
+    return await service.relocate_tile(
+        city_code, tile_id=req.tile_id, anchor=req.anchor, client_op_id=req.client_op_id
+    )
+
+
+@router.post("/{city_code}/historical")
+async def set_historical(city_code: str, req: HistoricalRequest) -> OperationResult:
+    return await service.set_historical(
+        city_code, tile_id=req.tile_id, historical=req.historical, client_op_id=req.client_op_id
+    )
+
+
+@router.post("/{city_code}/policy")
+async def set_city_policy(city_code: str, req: CityPolicyRequest) -> OperationResult:
+    return await service.set_city_policy(
+        city_code, policy=req.policy, enabled=req.enabled, client_op_id=req.client_op_id
+    )
+
+
+@router.post("/{city_code}/district")
+async def create_district(
+    city_code: str, body: DistrictRequest,
+    svc: Annotated[SaveService, Depends(get_service)]
+) -> dict:
+    result = await svc.create_district(
+        city_code,
+        name=body.name,
+        anchor=body.anchor,
+        rows=body.rows,
+        cols=body.cols,
+        client_op_id=body.client_op_id,
+    )
+    return result.model_dump(mode="json")
+
+
+@router.post("/{city_code}/district/policy")
+async def set_district_policy(
+    city_code: str, body: DistrictPolicyRequest,
+    svc: Annotated[SaveService, Depends(get_service)]
+) -> dict:
+    return await svc.set_district_policy(
+        city_code,
+        did=body.did,
+        policy=body.policy,
+        enabled=body.enabled,
+        client_op_id=body.client_op_id,
+    )
+
+
+@router.post("/{city_code}/transit")
+async def create_transit_line(
+    city_code: str, body: TransitLineRequest,
+    svc: Annotated[SaveService, Depends(get_service)]
+) -> dict:
+    return await svc.create_transit_line(
+        city_code,
+        name=body.name,
+        kind=body.kind,
+        stops=body.stops,
+        color=body.color,
+        client_op_id=body.client_op_id,
+    )
+
+
+@router.post("/{city_code}/transit/stop")
+async def add_transit_stop(
+    city_code: str, body: TransitStopRequest,
+    svc: Annotated[SaveService, Depends(get_service)]
+) -> dict:
+    return await svc.add_transit_stop(
+        city_code,
+        lid=body.lid,
+        tile_id=body.tile_id,
+        index=body.index,
+        client_op_id=body.client_op_id,
+    )
+
+
+@router.post("/{city_code}/transit/price")
+async def set_transit_price(
+    city_code: str, body: TransitPriceRequest,
+    svc: Annotated[SaveService, Depends(get_service)]
+) -> dict:
+    return await svc.set_transit_price(
+        city_code, lid=body.lid, price=body.price, client_op_id=body.client_op_id
+    )
+
+
+@router.post("/{city_code}/transit/{lid}/delete")
+async def delete_transit_line(
+    city_code: str, lid: int, body: TransitDeleteRequest,
+    svc: Annotated[SaveService, Depends(get_service)]
+) -> dict:
+    return await svc.delete_transit_line(
+        city_code, lid=lid, client_op_id=body.client_op_id
     )
 
 
@@ -104,6 +260,30 @@ async def advance(
     svc: Annotated[SaveService, Depends(get_service)]
 ) -> OperationResult:
     return await svc.apply(city_code, "advance", client_op_id=body.client_op_id, payload={})
+
+
+@router.post("/{city_code}/speed")
+async def set_speed(
+    city_code: str, body: SpeedRequest,
+    svc: Annotated[SaveService, Depends(get_service)]
+) -> dict[str, Any]:
+    return await svc.set_speed(city_code, body.speed)
+
+
+@router.post("/{city_code}/tax")
+async def set_tax(
+    city_code: str, body: TaxRequest,
+    svc: Annotated[SaveService, Depends(get_service)]
+) -> dict[str, Any]:
+    return await svc.set_tax_rate(city_code, body.service, body.rate)
+
+
+@router.post("/{city_code}/loan")
+async def take_loan(
+    city_code: str, body: LoanRequest,
+    svc: Annotated[SaveService, Depends(get_service)]
+) -> dict[str, Any]:
+    return await svc.take_loan(city_code, body.amount, body.months, body.rate_bp)
 
 
 @router.post("/{city_code}/project", response_model=ProjectionResult)

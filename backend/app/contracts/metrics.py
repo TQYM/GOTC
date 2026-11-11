@@ -33,6 +33,8 @@ class Metrics(BaseModel):
     upkeep: int = Field(ge=0)
     coverage_edu: float = Field(ge=0.0, le=1.0)
     coverage_med: float = Field(ge=0.0, le=1.0)
+    # 六条市政服务线的覆盖率（C:S 的警/消/垃圾/污水/电/水）
+    service_coverage: dict[str, float] = Field(default_factory=dict)
 
 
 class MetricsDiff(BaseModel):

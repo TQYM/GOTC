@@ -41,7 +41,7 @@ export interface RedevelopmentResult {
 
 export interface OperationResult {
   seq: number;
-  op_type: "place" | "remove" | "redevelop" | "advance";
+  op_type: "place" | "remove" | "redevelop" | "advance" | "zone";
   client_op_id: string;
   payload: Record<string, unknown>;
   tile: Tile | null;

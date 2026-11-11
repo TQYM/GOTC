@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -29,11 +30,19 @@ from app.core.report import build_template_report
 from app.core.repository import SaveRepository, utc_now
 from app.narrate.router import Narrator, schedule_news
 from app.sim import engine
+from app.sim.demand import Demand
+from app.sim.districts import POLICIES
+from app.sim.milestones import milestone_view
+from app.sim.policies import CITY_POLICIES, policy_list
 from app.sim.parcel_loader import load_city
+from app.sim.population import RES_TYPES as _RES_TYPES
 from app.sim.population import capacity_of
+from app.sim.traffic import JOB_TYPES as _JOB_TYPES
+from app.sim.transit import LINE_KINDS
 from app.sim.projection import determine_ending, scores_of
 
 CITY_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -44,6 +53,7 @@ class SaveRuntime:
     broadcaster: Broadcaster = field(
         default_factory=lambda: Broadcaster(start_id=int(time.time() * 1000))
     )
+    sim_task: asyncio.Task | None = None
 
 
 class SaveService:
@@ -77,6 +87,9 @@ class SaveService:
         await self.repository.initialize()
 
     async def close(self) -> None:
+        for runtime in self._runtimes.values():
+            if runtime.sim_task is not None and not runtime.sim_task.done():
+                runtime.sim_task.cancel()
         for task in list(self._tasks):
             task.cancel()
         if self._tasks:
@@ -172,6 +185,10 @@ class SaveService:
             state.lock = runtime.lock
             state.broadcaster = runtime.broadcaster
             self._runtimes[code] = runtime
+            # 进程重启后内存里的 sim_task 会丢：只要城市还在建设期且没暂停，
+            # 就把实时循环接回来，否则前端会看到「时间停了」。
+            if state.phase is Phase.BUILDING and not state.clock.paused:
+                runtime.sim_task = asyncio.create_task(self._simulation_loop(runtime))
             return runtime
 
     @staticmethod
@@ -188,7 +205,139 @@ class SaveService:
             city_year=state.at_year,
             phase=state.phase,
             last_seq=state.seq,
+            districts=[d.to_dict() for d in state.districts.districts.values()],
+            transit=[line.to_dict() for line in state.transit.lines.values()],
         )
+
+    # ---- 实时模拟（C:S 的连续推进 + 速度档）----
+
+    SIM_TICK_SEC = 1.0 / 12.0  # 1x 速度下每帧的现实秒数（一年 3600 帧 ≈ 300 秒）
+    SIM_PUBLISH_EVERY = 8      # 每 8 tick 推一次快照，约 1.5 次/秒
+
+    async def set_speed(self, city_code: str, speed: int) -> dict[str, Any]:
+        """设置模拟速度档：0 暂停 / 1 1x / 2 2x / 3 3x（实际 4x）。"""
+        if speed not in (0, 1, 2, 3):
+            raise GameError(
+                ErrorCode.INVALID_PLACEMENT, "速度档位无效", {"speed": speed}
+            )
+        runtime = await self._runtime(city_code)
+        async with runtime.lock:
+            runtime.state.clock.speed = speed
+            if speed > 0 and (runtime.sim_task is None or runtime.sim_task.done()):
+                runtime.sim_task = asyncio.create_task(self._simulation_loop(runtime))
+            view = self._sim_view(runtime.state)
+        runtime.broadcaster.publish("speed_change", view)
+        return view
+
+    async def set_tax_rate(self, city_code: str, service: str, rate: int) -> dict[str, Any]:
+        """设置某服务类别的税率（C:S 的 1..29 百分点）。"""
+        from app.sim.budget import Service
+
+        try:
+            svc = Service(service)
+        except ValueError as exc:
+            raise GameError(
+                ErrorCode.INVALID_PLACEMENT, "未知的服务类别", {"service": service}
+            ) from exc
+        runtime = await self._runtime(city_code)
+        async with runtime.lock:
+            applied = runtime.state.budget.set_tax_rate(svc, rate)
+            runtime.state._recompute()
+            view = self._sim_view(runtime.state)
+            view["tax_rates"] = dict(runtime.state.budget.tax_rates)
+        runtime.broadcaster.publish("tax_change", view)
+        return {"service": svc.value, "rate": applied, "view": view}
+
+    async def take_loan(
+        self, city_code: str, amount: int, months: int = 60, rate_bp: int = 500
+    ) -> dict[str, Any]:
+        """申请一笔贷款：资金立即到账，按月摊销本息（C:S 的 Loan 结构）。"""
+        runtime = await self._runtime(city_code)
+        async with runtime.lock:
+            loan = runtime.state.budget.take_loan(amount, rate_bp, months)
+            runtime.state.funds += amount
+            runtime.state.metrics = runtime.state.metrics.model_copy(
+                update={"funds": runtime.state.funds}
+            )
+            view = self._sim_view(runtime.state)
+        runtime.broadcaster.publish("budget_change", view)
+        return {
+            "principal": loan.principal,
+            "remaining": loan.remaining,
+            "monthly_payment": loan.monthly_payment(),
+            "months": loan.months,
+            "rate_bp": loan.rate_bp,
+            "view": view,
+        }
+
+    async def _simulation_loop(self, runtime: SaveRuntime) -> None:
+        """每 SIM_TICK_SEC 推进一个 tick；暂停时挂起但不退出。"""
+        ticks = 0
+        try:
+            # 先推一次完整视图：前端订阅后即使处于暂停，也能立刻拿到财政/市民/天气
+            runtime.broadcaster.publish("sim_tick", self._sim_view(runtime.state))
+            while True:
+                await asyncio.sleep(self.SIM_TICK_SEC)
+                async with runtime.lock:
+                    state = runtime.state
+                    if state.closed or state.finalized:
+                        return
+                    if state.clock.paused or state.phase is not Phase.BUILDING:
+                        # 暂停时帧不动，但面板数据要能刷新（税率、贷款、市民结构）
+                        ticks += 1
+                        if ticks % (self.SIM_PUBLISH_EVERY * 4) == 0:
+                            runtime.broadcaster.publish("sim_tick", self._sim_view(state))
+                        continue
+                    state.advance(1)
+                    ticks += 1
+                    if ticks % self.SIM_PUBLISH_EVERY == 0:
+                        runtime.broadcaster.publish("sim_tick", self._sim_view(state))
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # 实时循环异常不应拖垮服务
+            log.exception("simulation loop failed for %s", runtime.state.city_code)
+
+    @staticmethod
+    def _sim_view(state: CityState) -> dict[str, Any]:
+        return {
+            "frame": state.clock.frame,
+            "year": state.at_year,
+            "speed": state.clock.speed,
+            "paused": state.clock.paused,
+            "hour": round(state.clock.hour, 2),
+            "demand": {
+                "residential": Demand.to_ui(state.demand.displayed_residential),
+                "commercial": Demand.to_ui(state.demand.displayed_commercial),
+                "workplace": Demand.to_ui(state.demand.displayed_workplace),
+            },
+            "builds_total": state.builds_total,
+            "budget": {
+                "funds": state.funds,
+                "day_income": sum(state.budget.day_income.values()),
+                "day_expenses": sum(state.budget.day_expenses.values()),
+                "night_expenses": state.budget.night_expenses,
+                "debt": state.budget.total_debt(),
+                "tax_rates": dict(state.budget.tax_rates),
+                "income_by_service": dict(state.budget.day_income),
+                "expenses_by_service": dict(state.budget.day_expenses),
+            },
+            "citizens": state.citizens.stats().to_dict(),
+            "districts": [d.to_dict() for d in state.districts.districts.values()],
+            "transit": [line.to_dict() for line in state.transit.lines.values()],
+            "weather": state.weather.to_dict() if state.weather else None,
+            "history": state.history[-40:],
+            "milestone": milestone_view(state.metrics.population),
+            "policies": policy_list(state.city_policies),
+            "disaster": state.last_disaster,
+            "transit_coverage": round(
+                state.transit.coverage_ratio(
+                    [t.id for t in state.tiles.values() if t.type in _RES_TYPES],
+                    [t.id for t in state.tiles.values() if t.type in _JOB_TYPES],
+                ),
+                4,
+            ),
+            "metrics": state.metrics.model_dump(mode="json") if state.metrics else None,
+        }
 
     async def get(self, city_code: str) -> SaveState:
         runtime = await self._runtime(city_code)
@@ -232,11 +381,256 @@ class SaveService:
         if op_type == "remove":
             tile, _metrics, _diff, _funds = state.remove(payload["tile_id"])
             return tile, [], None
+        if op_type == "zone":
+            # 批量划区：C:S 的刷子。逐格放置的确定性由 anchor 顺序 + 固定 tile_id 保证。
+            state.zone(
+                TileType(payload["type"]),
+                payload["anchor"],
+                int(payload["rows"]),
+                int(payload["cols"]),
+            )
+            return None, [], None
+        if op_type == "rename":
+            tile = state.rename_tile(payload["tile_id"], payload.get("name"))
+            if tile is None:
+                raise GameError(ErrorCode.INVALID_PAYLOAD, "地块不存在", {"tile_id": payload["tile_id"]})
+            return None, tile, None
+        if op_type == "historical":
+            tile = state.set_historical(payload["tile_id"], bool(payload.get("historical", True)))
+            if tile is None:
+                raise GameError(ErrorCode.INVALID_PAYLOAD, "地块不存在", {"tile_id": payload["tile_id"]})
+            return None, tile, None
+        if op_type == "relocate":
+            moved, reason = state.relocate_tile(payload["tile_id"], list(payload["anchor"]))
+            if moved is None:
+                raise GameError(ErrorCode.INVALID_PLACEMENT, reason or "无法搬迁",
+                                {"tile_id": payload["tile_id"]})
+            return moved, [], None
+        if op_type == "city_policy":
+            policy = str(payload["policy"])
+            if policy not in CITY_POLICIES:
+                raise GameError(ErrorCode.INVALID_PAYLOAD, "未知政策", {"policy": policy})
+            state.set_city_policy(policy, bool(payload.get("enabled", True)))
+            return None, [], None
+
+        if op_type == "district":
+            state.create_district(
+                payload.get("name", ""),
+                payload["anchor"],
+                int(payload.get("rows", 1)),
+                int(payload.get("cols", 1)),
+            )
+            return None, [], None
+        if op_type == "district_policy":
+            state.set_district_policy(
+                int(payload["did"]), str(payload["policy"]), bool(payload["enabled"])
+            )
+            return None, [], None
+        if op_type == "transit_line":
+            lid, reason = state.create_transit_line(
+                str(payload.get("name", "")),
+                str(payload["kind"]),
+                list(payload.get("stops", [])),
+                str(payload.get("color", "#3D8BFF")),
+            )
+            if reason is not None:
+                raise GameError(
+                    ErrorCode.INVALID_PAYLOAD if reason != "INSUFFICIENT_FUNDS" else ErrorCode.CONFLICT,
+                    f"建线失败: {reason}",
+                    {"reason": reason},
+                )
+            return None, [], None
+        if op_type == "transit_stop":
+            reason = state.add_transit_stop(
+                int(payload["lid"]), str(payload["tile_id"]), payload.get("index")
+            )
+            if reason is not None:
+                raise GameError(ErrorCode.INVALID_PAYLOAD, f"加站失败: {reason}", {"reason": reason})
+            return None, [], None
+        if op_type == "transit_price":
+            reason = state.set_transit_price(int(payload["lid"]), float(payload["price"]))
+            if reason is not None:
+                raise GameError(ErrorCode.NOT_FOUND, "线路不存在", {"lid": payload["lid"]})
+            return None, [], None
+        if op_type == "transit_delete":
+            reason = state.delete_transit_line(int(payload["lid"]))
+            if reason is not None:
+                raise GameError(ErrorCode.NOT_FOUND, "线路不存在", {"lid": payload["lid"]})
+            return None, [], None
         if op_type == "advance":
             return None, state.advance_year(), None
         if op_type == "redevelop":
             return None, [], state.redevelop(payload["anchor"])
         raise RuntimeError(f"未知 op_type: {op_type}")
+
+    async def zone(
+        self,
+        city_code: str,
+        *,
+        tile_type: str,
+        anchor: list[int],
+        rows: int,
+        cols: int,
+        client_op_id: str,
+    ) -> OperationResult:
+        """批量划区：一次铺 rows×cols 片，等价于 C:S 的拖拽刷子。"""
+        payload = {
+            "type": tile_type,
+            "anchor": anchor,
+            "rows": max(1, min(rows, 16)),
+            "cols": max(1, min(cols, 16)),
+        }
+        return await self.apply(city_code, "zone", client_op_id=client_op_id, payload=payload)
+
+    async def rename_tile(
+        self, city_code: str, *, tile_id: str, name: str | None, client_op_id: str
+    ) -> OperationResult:
+        return await self.apply(
+            city_code,
+            "rename",
+            client_op_id=client_op_id,
+            payload={"tile_id": tile_id, "name": name},
+        )
+
+    async def set_historical(
+        self, city_code: str, *, tile_id: str, historical: bool, client_op_id: str
+    ) -> OperationResult:
+        return await self.apply(
+            city_code,
+            "historical",
+            client_op_id=client_op_id,
+            payload={"tile_id": tile_id, "historical": historical},
+        )
+
+    async def relocate_tile(
+        self, city_code: str, *, tile_id: str, anchor: list[int], client_op_id: str
+    ) -> OperationResult:
+        return await self.apply(
+            city_code,
+            "relocate",
+            client_op_id=client_op_id,
+            payload={"tile_id": tile_id, "anchor": anchor},
+        )
+
+    async def set_city_policy(
+        self, city_code: str, *, policy: str, enabled: bool, client_op_id: str
+    ) -> OperationResult:
+        return await self.apply(
+            city_code, "city_policy",
+            client_op_id=client_op_id,
+            payload={"policy": policy, "enabled": enabled},
+        )
+
+    async def create_district(
+        self,
+        city_code: str,
+        *,
+        name: str,
+        anchor: list[int],
+        rows: int,
+        cols: int,
+        client_op_id: str,
+    ) -> OperationResult:
+        """圈一个行政区：C:S 的 DistrictTool 刷子，这里用矩形近似。"""
+        payload = {
+            "name": name,
+            "anchor": anchor,
+            "rows": max(1, min(rows, 16)),
+            "cols": max(1, min(cols, 16)),
+        }
+        return await self.apply(
+            city_code, "district", client_op_id=client_op_id, payload=payload
+        )
+
+    async def set_district_policy(
+        self,
+        city_code: str,
+        *,
+        did: int,
+        policy: str,
+        enabled: bool,
+        client_op_id: str,
+    ) -> dict[str, Any]:
+        """开关一条区政策（C:S 的 SetDistrictPolicy / UnsetDistrictPolicy）。"""
+        if policy not in POLICIES:
+            raise GameError(ErrorCode.INVALID_PAYLOAD, "未知政策", {"policy": policy})
+        result = await self.apply(
+            city_code,
+            "district_policy",
+            client_op_id=client_op_id,
+            payload={"did": did, "policy": policy, "enabled": enabled},
+        )
+        runtime = await self._runtime(city_code)
+        async with runtime.lock:
+            district = runtime.state.districts.districts.get(did)
+            if district is None:
+                raise GameError(ErrorCode.NOT_FOUND, "行政区不存在", {"did": did})
+            view = self._sim_view(runtime.state)
+            runtime.broadcaster.publish("district_change", view)
+        return {"district": district.to_dict(), "view": view, "op": result}
+
+
+    async def create_transit_line(
+        self,
+        city_code: str,
+        *,
+        name: str,
+        kind: str,
+        stops: list[str],
+        color: str = "#3D8BFF",
+        client_op_id: str,
+    ) -> dict[str, Any]:
+        """建一条公交/地铁线（C:S 的 TransportLine）。"""
+        if kind not in LINE_KINDS:
+            raise GameError(ErrorCode.INVALID_PAYLOAD, "未知制式", {"kind": kind})
+        await self.apply(
+            city_code,
+            "transit_line",
+            client_op_id=client_op_id,
+            payload={"name": name, "kind": kind, "stops": stops, "color": color},
+        )
+        runtime = await self._runtime(city_code)
+        async with runtime.lock:
+            lines = list(runtime.state.transit.lines.values())
+            if not lines:
+                raise GameError(ErrorCode.CONFLICT, "线路未创建", {})
+            line = lines[-1]
+            return {"line": line.to_dict(), "view": self._sim_view(runtime.state)}
+
+    async def add_transit_stop(
+        self, city_code: str, *, lid: int, tile_id: str, index: int | None = None,
+        client_op_id: str,
+    ) -> dict[str, Any]:
+        await self.apply(
+            city_code, "transit_stop", client_op_id=client_op_id,
+            payload={"lid": lid, "tile_id": tile_id, "index": index},
+        )
+        runtime = await self._runtime(city_code)
+        async with runtime.lock:
+            return {"line": runtime.state.transit.lines[lid].to_dict(),
+                    "view": self._sim_view(runtime.state)}
+
+    async def set_transit_price(
+        self, city_code: str, *, lid: int, price: float, client_op_id: str
+    ) -> dict[str, Any]:
+        await self.apply(
+            city_code, "transit_price", client_op_id=client_op_id,
+            payload={"lid": lid, "price": price},
+        )
+        runtime = await self._runtime(city_code)
+        async with runtime.lock:
+            return {"line": runtime.state.transit.lines[lid].to_dict(),
+                    "view": self._sim_view(runtime.state)}
+
+    async def delete_transit_line(
+        self, city_code: str, *, lid: int, client_op_id: str
+    ) -> dict[str, Any]:
+        await self.apply(
+            city_code, "transit_delete", client_op_id=client_op_id, payload={"lid": lid}
+        )
+        runtime = await self._runtime(city_code)
+        async with runtime.lock:
+            return {"deleted": lid, "view": self._sim_view(runtime.state)}
 
     async def apply(
         self,
@@ -269,7 +663,7 @@ class SaveService:
                 op_type=op_type,
                 client_op_id=client_op_id,
                 payload=payload,
-                tile=tile if op_type in ("place", "remove") else None,
+                tile=tile if op_type in ("place", "remove", "relocate", "historical", "rename") else None,
                 tiles=list(working.tiles.values()),
                 redeveloped_asset_ids=sorted(working.redeveloped_asset_ids),
                 redevelopment=redevelopment,
@@ -277,7 +671,7 @@ class SaveService:
                 metrics_diff=diff,
                 funds_after=working.funds,
                 city_year=working.at_year,
-                annual_events=annual_events,
+                annual_events=annual_events if isinstance(annual_events, list) else [],
             )
             committed, raw_result = await self.repository.append_operation(
                 save_id=runtime.record["save_id"],

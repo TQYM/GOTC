@@ -15,7 +15,7 @@ export default function Toasts() {
   const dismiss = useGame((s) => s.dismissToast);
   return (
     <div
-      className="pointer-events-none absolute inset-x-0 top-[8.5rem] z-30 flex flex-col items-center gap-4 px-3"
+      className="pointer-events-none absolute inset-x-0 top-[15rem] z-30 flex flex-col items-center gap-4 px-3"
       aria-live="polite"
     >
       {toasts.map((t) => (

@@ -80,6 +80,8 @@ CITIZEN_TOPIC_BY_TILE = {
     "ind_light": "pollution",
     "ind_heavy": "pollution",
     "trans_road": "commute",
+    "trans_avenue": "commute",
+    "trans_highway": "commute",
     "trans_metro": "commute",
     "green_park": "green",
     "green_plaza": "green",

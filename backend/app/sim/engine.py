@@ -17,6 +17,10 @@ from app.sim.landprice import land_price_index
 from app.sim.pollution import city_pollution
 from app.sim.population import ResStat, population_of, residential_stats
 from app.sim.traffic import compute_traffic
+from app.sim.services import service_coverage, service_effects
+from app.sim.transit import TransitManager
+from app.sim.policies import PolicyEffects
+from app.sim.weather import WeatherState, weather_effects
 
 # diff 不追踪的元信息字段（at_year/at_phase 由事件自身携带）
 _META_FIELDS = {"at_year", "at_phase"}
@@ -36,6 +40,12 @@ def recompute(
     existing_jobs: int = 0,
     existing_upkeep: int = 0,
     happiness_adjustment: int = 0,
+    built: dict[str, float] | None = None,
+    tax_rate: float = 9.0,
+    pollution_scale: float = 1.0,
+    transit: TransitManager | None = None,
+    weather: WeatherState | None = None,
+    policies: PolicyEffects | None = None,
 ) -> Metrics:
     """全量重算（03 §1：48×48 全量 <10ms，不做增量）。"""
     mod = modifier or EventModifier()
@@ -45,11 +55,27 @@ def recompute(
         else residential_stats(parcel, tiles, config)
     )
     population = population_of(stats) + existing_population
-    jobs = jobs_of(tiles, config) + existing_jobs
+    raw_jobs = jobs_of(tiles, config, built) + existing_jobs
+    # 市政服务：覆盖率不足时岗位打折（缺电/缺水/垃圾围城）
+    coverage6 = service_coverage(parcel, tiles, config)
+    service = service_effects(coverage6, population)
+    jobs = round(raw_jobs * service.jobs_mult)
     land_price = round(land_price_index(parcel, tiles, stats, config) + mod.land_bonus, 1)
-    traffic = compute_traffic(parcel, tiles, stats, config)
+    weather_fx = weather_effects(weather)
+    policy = policies or PolicyEffects()
+    traffic = compute_traffic(
+        parcel, tiles, stats, config, transit,
+        commute_mult=weather_fx.commute_mult * policy.commute_mult,
+    )
     green = green_ratio(parcel, tiles)
-    pollution = city_pollution(parcel, tiles, stats, config)
+    pollution = min(
+        1.0,
+        city_pollution(parcel, tiles, stats, config)
+        * pollution_scale
+        * weather_fx.pollution_mult
+        * policy.pollution_mult
+        + service.pollution_bonus,
+    )
     edu, med = coverage(stats, tiles, config)
     res_high = sum(1 for t in tiles if t.type is TileType.RES_HIGH)
     res_total = sum(
@@ -64,7 +90,12 @@ def recompute(
         coverage_edu=edu,
         coverage_med=med,
         res_high_share=res_high / res_total if res_total else 0.0,
-        event_delta=mod.happiness_delta + happiness_adjustment,
+        event_delta=(
+            mod.happiness_delta
+            + happiness_adjustment
+            + service.happiness
+            + policy.happiness
+        ),
     )
     return Metrics(
         at_year=at_year,
@@ -79,25 +110,49 @@ def recompute(
         congestion=traffic.congestion,
         pollution=pollution,
         happiness=happiness,
-        tax_income=tax_income(
-            stats,
-            jobs,
-            land_price,
-            job_mult=mod.job_tax_mult,
-            additional_population=existing_population,
+        tax_income=round(
+            tax_income(
+                stats,
+                jobs,
+                land_price,
+                job_mult=mod.job_tax_mult,
+                additional_population=existing_population,
+                tax_rate=tax_rate,
+            )
+            * policy.tax_mult
         ),
-        upkeep=round((upkeep_of(tiles) + existing_upkeep) * mod.upkeep_mult),
+        upkeep=round(
+            (upkeep_of(tiles, built) + existing_upkeep)
+            * mod.upkeep_mult
+            * weather_fx.upkeep_mult
+            * policy.upkeep_mult
+        ),
         coverage_edu=edu,
         coverage_med=med,
+        service_coverage=coverage6.to_dict(),
     )
 
 
 def metrics_diff(before: Metrics | None, after: Metrics) -> MetricsDiff:
-    """逐字段 diff（02 §2.2）：只带变化字段的新值。"""
+    """逐字段 diff（02 §2.2）：只带变化字段的新值。
+
+    `delta` 的契约是 `dict[str, int | float]`，因此嵌套结构
+    （如 `service_coverage`）不进 diff——它们通过快照给前端。
+    """
+    new = after.model_dump()
     if before is None:
-        delta = {k: v for k, v in after.model_dump().items() if k not in _META_FIELDS}
+        delta = {
+            key: value
+            for key, value in new.items()
+            if key not in _META_FIELDS and isinstance(value, (int, float))
+        }
     else:
         old = before.model_dump()
-        new = after.model_dump()
-        delta = {k: new[k] for k in new if k not in _META_FIELDS and new[k] != old[k]}
+        delta = {
+            key: new[key]
+            for key in new
+            if key not in _META_FIELDS
+            and isinstance(new[key], (int, float))
+            and new[key] != old.get(key)
+        }
     return MetricsDiff(at_year=after.at_year, delta=delta)

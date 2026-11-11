@@ -19,6 +19,25 @@ import type {
   Tile,
   TileType,
 } from "@/lib/contract";
+import type {
+  BudgetView,
+  CitizenView,
+  DisasterView,
+  DistrictView,
+  TransitLineView,
+  MilestoneView,
+  PolicyView,
+  WeatherView,
+  YearPoint,
+} from "@/lib/api/cityApi";
+
+export type InfoViewType =
+  | "default"
+  | "landprice"
+  | "pollution"
+  | "traffic"
+  | "happiness"
+  | "jobs";
 import type { OperationResult, ReportResult, SharedPhase } from "@/lib/contractV2";
 import type { BuildingsFile, ExistingAsset } from "@saves/lib/types";
 import {
@@ -119,10 +138,52 @@ interface GameState {
   conn: ConnState;
   /** 断线开始时间（ms），用于「超过 30s 提示刷新」 */
   downSince: number | null;
+  /** 实时模拟速度档：0 暂停 / 1 1x / 2 2x / 3 3x（实际 4x） */
+  speed: 0 | 1 | 2 | 3;
+  /** RCI 需求条 0..100（C:S 的 displayed 值） */
+  demand: { residential: number; commercial: number; workplace: number };
+  /** 闸门累计建成栋数 */
+  buildsTotal: number;
+  /** 财政快照：资金/日收支/负债/税率 */
+  budget: BudgetView | null;
+  citizens: CitizenView | null;
+  districts: DistrictView[];
+  transit: TransitLineView[];
+  lastDisaster: DisasterView | null;
+  weather: WeatherView | null;
+  history: YearPoint[];
+  milestone: MilestoneView | null;
+  policies: PolicyView[];
+  transitCoverage: number;
+  transitPanelOpen: boolean;
+  toggleTransitPanel(): void;
+  createTransitLine(kind: "bus" | "metro", stops: string[], name?: string): Promise<void>;
+  addTransitStop(lid: number, tileId: string): Promise<void>;
+  setTransitPrice(lid: number, price: number): Promise<void>;
+  deleteTransitLine(lid: number): Promise<void>;
+  districtPanelOpen: boolean;
+  toggleDistrictPanel(): void;
+  setDistrictPolicy(did: number, policy: string, enabled: boolean): Promise<void>;
+  setHistorical(tileId: string, historical: boolean): Promise<void>;
+  renameTile(tileId: string, name: string | null): Promise<void>;
+  relocateTile(tileId: string, anchor: [number, number]): Promise<void>;
+  setCityPolicy(policy: string, enabled: boolean): Promise<void>;
+  citizenPanelOpen: boolean;
+  toggleCitizenPanel(): void;
+  /** 信息视图：默认 / 地价 / 污染 / 交通（对标 C:S 的 InfoManager 视图） */
+  infoView: InfoViewType;
+  /** 当前模拟帧（一年 3600 帧） */
+  simFrame: number;
 
   init(api: CityApi, id: string): Promise<void>;
   /** 订阅推送；返回退订函数（由页面 effect 管理生命周期） */
   connect(): () => void;
+  /** 设置速度档并把返回的实时视图写入状态。 */
+  setSpeed(speed: 0 | 1 | 2 | 3): Promise<void>;
+  zoneAt(type: TileType, anchor: [number, number], rows: number, cols: number): Promise<void>;
+  setInfoView(view: InfoViewType): void;
+  setTaxRate(service: string, rate: number): Promise<void>;
+  takeLoan(amount: number, months?: number): Promise<void>;
   applyEvent(e: StreamEvent): void;
   resync(): Promise<void>;
   /** 后端确认的阶段迁移（REST 响应或推送），本地不做乐观迁移 */
@@ -295,6 +356,24 @@ export const useGame = create<GameState>()((set, get) => {
     lastEventId: -1,
     conn: "connecting",
     downSince: null,
+    speed: 0,
+    demand: { residential: 50, commercial: 50, workplace: 50 },
+    buildsTotal: 0,
+    budget: null,
+    citizens: null,
+    districts: [],
+    transit: [],
+    lastDisaster: null,
+    weather: null,
+    history: [],
+    milestone: null,
+    policies: [],
+    transitCoverage: 0,
+    transitPanelOpen: true,
+    districtPanelOpen: true,
+    citizenPanelOpen: true,
+    infoView: "default",
+    simFrame: 0,
 
     async init(api, id) {
       set({
@@ -353,6 +432,173 @@ export const useGame = create<GameState>()((set, get) => {
       });
     },
 
+    toggleDistrictPanel() {
+      set((state) => ({ districtPanelOpen: !state.districtPanelOpen }));
+    },
+
+    async setCityPolicy(policy: string, enabled: boolean) {
+      const { api, id, busy } = get();
+      if (!api?.setCityPolicy || !id || busy) return;
+      set({ busy: true });
+      try {
+        const r = await api.setCityPolicy(id, policy, enabled);
+        applyOperation(r);
+        // OperationResult 不带 policies，本地先乐观更新，下一次 sim_tick 会校正。
+        set({
+          policies: get().policies.map((item) =>
+            item.key === policy ? { ...item, enabled } : item,
+          ),
+        });
+      } catch (e) {
+        fail(e, "政策没生效", () => void get().setCityPolicy(policy, !enabled));
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    async renameTile(tileId: string, name: string | null) {
+    const { api, id, busy } = get();
+    if (!api?.renameTile || !id || busy) return;
+    set({ busy: true });
+    try {
+      await api.renameTile(id, tileId, name);
+      set({
+        tiles: get().tiles.map((t) =>
+          t.id === tileId ? { ...t, name: name?.trim() || null } : t,
+        ),
+      });
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  async relocateTile(tileId: string, anchor: [number, number]) {
+    const { api, id, busy } = get();
+    if (!api?.relocateTile || !id || busy) return;
+    set({ busy: true });
+    try {
+      await api.relocateTile(id, tileId, anchor);
+      await get().resync();
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  async setHistorical(tileId: string, historical: boolean) {
+    const { api, id, busy } = get();
+    if (!api?.setHistorical || !id || busy) return;
+    set({ busy: true });
+    try {
+      await api.setHistorical(id, tileId, historical);
+      set({
+        tiles: get().tiles.map((t) =>
+          t.id === tileId ? { ...t, historical } : t,
+        ),
+      });
+    } finally {
+      set({ busy: false });
+    }
+  },
+
+  async setDistrictPolicy(did, policy, enabled) {
+      const { api, id } = get();
+      if (!api?.setDistrictPolicy || !id) return;
+      const result = await api.setDistrictPolicy(id, did, policy, enabled);
+      set((state) => ({
+        districts: state.districts.map((d) => (d.did === did ? result.district : d)),
+      }));
+    },
+
+    toggleCitizenPanel() {
+      set((state) => ({ citizenPanelOpen: !state.citizenPanelOpen }));
+    },
+
+    toggleTransitPanel() {
+      set((state) => ({ transitPanelOpen: !state.transitPanelOpen }));
+    },
+
+    async createTransitLine(kind, stops, name) {
+      const { api, id } = get();
+      if (!api?.createTransitLine || !id) return;
+      const result = await api.createTransitLine(id, { name: name ?? "", kind, stops });
+      set((state) => ({
+        transit: [...state.transit, result.line],
+        transitCoverage: result.view.transit_coverage ?? state.transitCoverage,
+      }));
+    },
+
+    async addTransitStop(lid, tileId) {
+      const { api, id } = get();
+      if (!api?.addTransitStop || !id) return;
+      const result = await api.addTransitStop(id, lid, tileId);
+      set((state) => ({
+        transit: state.transit.map((line) => (line.lid === lid ? result.line : line)),
+      }));
+    },
+
+    async setTransitPrice(lid, price) {
+      const { api, id } = get();
+      if (!api?.setTransitPrice || !id) return;
+      const result = await api.setTransitPrice(id, lid, price);
+      set((state) => ({
+        transit: state.transit.map((line) => (line.lid === lid ? result.line : line)),
+      }));
+    },
+
+    async deleteTransitLine(lid) {
+      const { api, id } = get();
+      if (!api?.deleteTransitLine || !id) return;
+      await api.deleteTransitLine(id, lid);
+      set((state) => ({ transit: state.transit.filter((line) => line.lid !== lid) }));
+    },
+
+    async setSpeed(speed) {
+      const { api, id } = get();
+      if (!api?.setSpeed || !id) return;
+      const view = await api.setSpeed(id, speed);
+      set({
+        speed: view.speed,
+        simFrame: view.frame,
+        demand: view.demand,
+        buildsTotal: view.builds_total,
+        ...(view.budget ? { budget: view.budget } : {}),
+        ...(view.citizens ? { citizens: view.citizens } : {}),
+        ...(view.districts ? { districts: view.districts } : {}),
+        ...(view.transit ? { transit: view.transit } : {}),
+        ...(view.disaster !== undefined ? { lastDisaster: view.disaster } : {}),
+        ...(view.weather !== undefined ? { weather: view.weather } : {}),
+        ...(view.history ? { history: view.history } : {}),
+        ...(view.milestone ? { milestone: view.milestone } : {}),
+        ...(view.policies ? { policies: view.policies } : {}),
+        ...(view.transit_coverage != null ? { transitCoverage: view.transit_coverage } : {}),
+        ...(view.metrics ? { metrics: view.metrics } : {}),
+      });
+    },
+
+    setInfoView(view) {
+      set({ infoView: view });
+    },
+
+    async setTaxRate(service, rate) {
+      const { api, id } = get();
+      if (!api?.setTaxRate || !id) return;
+      const result = await api.setTaxRate(id, service, rate);
+      set({
+        budget: result.view.budget ?? get().budget,
+        ...(result.view.metrics ? { metrics: result.view.metrics } : {}),
+      });
+    },
+
+    async takeLoan(amount, months = 60) {
+      const { api, id } = get();
+      if (!api?.takeLoan || !id) return;
+      const result = await api.takeLoan(id, amount, months);
+      set({
+        budget: result.view.budget ?? get().budget,
+        ...(result.view.metrics ? { metrics: result.view.metrics } : {}),
+      });
+    },
+
     async resync() {
       const { api, id } = get();
       if (!api || !id) return;
@@ -381,6 +627,44 @@ export const useGame = create<GameState>()((set, get) => {
     applyEvent(e) {
       if (e.id !== null && e.id > get().lastEventId) set({ lastEventId: e.id });
       switch (e.event) {
+        case "sim_tick":
+        case "speed_change": {
+          const d = e.data;
+          // 新灾难落一年只播报一次：同名 + 同地块视为同一次
+          const prevDisaster = get().lastDisaster;
+          if (
+            d.disaster &&
+            (!prevDisaster ||
+              prevDisaster.kind !== d.disaster.kind ||
+              prevDisaster.tile_id !== d.disaster.tile_id)
+          ) {
+            get().toast({
+              tone: "error",
+              title: `${d.disaster.label}${d.disaster.tile_id ? "· 一栋建筑被毁" : ""}`,
+              hint: "幸福度下降，重建需要时间",
+            });
+          }
+          set({
+            simFrame: d.frame,
+            speed: d.speed,
+            demand: d.demand,
+            buildsTotal: d.builds_total,
+            ...(d.budget ? { budget: d.budget } : {}),
+            ...(d.citizens ? { citizens: d.citizens } : {}),
+            ...(d.districts ? { districts: d.districts } : {}),
+            ...(d.transit ? { transit: d.transit } : {}),
+            ...(d.weather ? { weather: d.weather } : {}),
+            ...(d.history ? { history: d.history } : {}),
+            ...(d.milestone ? { milestone: d.milestone } : {}),
+            ...(d.policies ? { policies: d.policies } : {}),
+            ...(d.disaster !== undefined ? { lastDisaster: d.disaster } : {}),
+            ...(typeof d.transit_coverage === "number"
+              ? { transitCoverage: d.transit_coverage }
+              : {}),
+            ...(d.metrics ? { metrics: d.metrics } : {}),
+          });
+          return;
+        }
         case "snapshot":
           get().applySnapshot(e.data);
           return;
@@ -669,6 +953,28 @@ export const useGame = create<GameState>()((set, get) => {
         });
       } catch (e) {
         fail(e, chk.reason, () => void get().buildAt(type, anchor));
+      } finally {
+        set({ busy: false });
+      }
+    },
+
+    /** 批量划区：C:S 的刷子。成功与否以服务端返回的 tiles 为准。 */
+    async zoneAt(type: TileType, anchor: [number, number], rows: number, cols: number) {
+      const { api, id, busy, phase } = get();
+      if (!api?.zone || !id || busy) return;
+      if (phase !== "building") return;
+      set({ busy: true });
+      try {
+        const r = await api.zone(id, { type, anchor, rows, cols });
+        applyOperation(r);
+        const before = get().tiles.length;
+        get().toast({
+          tone: "ok",
+          title: `划区完成 · ${rows}×${cols}`,
+          hint: `当前 ${before} 片地块，建成度会随时间自动生长`,
+        });
+      } catch (e) {
+        fail(e, "这一片里有格子不能划", () => void get().zoneAt(type, anchor, rows, cols));
       } finally {
         set({ busy: false });
       }

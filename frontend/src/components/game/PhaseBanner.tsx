@@ -80,6 +80,7 @@ export default function PhaseBanner() {
   const projectionBaseSeq = useGame((s) => s.projectionBaseSeq);
   const cityReport = useGame((s) => s.cityReport);
   const advanceYear = useGame((s) => s.advanceYear);
+  const speed = useGame((s) => s.speed);
   const project = useGame((s) => s.project);
   const makeReport = useGame((s) => s.makeReport);
   const backToBuilding = useGame((s) => s.backToBuilding);
@@ -115,7 +116,7 @@ export default function PhaseBanner() {
   return (
     <>
       <div
-        className="pointer-events-none absolute right-4 top-4 z-20 flex max-w-[min(26rem,50vw)] flex-col-reverse items-end gap-3"
+        className="pointer-events-none absolute right-4 top-[15rem] z-20 flex max-w-[min(26rem,50vw)] flex-col-reverse items-end gap-3"
         data-testid="phase-banner"
       >
         <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1.5">
@@ -161,11 +162,10 @@ export default function PhaseBanner() {
               <RoundAction
                 testId="advance-year"
                 icon="ff"
-                caption="快进一年"
-                primary
-                label="快进一年：收税、人口迁移、年度事件"
-                disabled={busy || !caps?.advanceYear}
-                why={NOT_YET}
+                caption="补一年"
+                label="手动补一年：实时模拟暂停时用它推进；运行时请用速度控制"
+                disabled={busy || !caps?.advanceYear || speed > 0}
+                why={speed > 0 ? "模拟正在实时推进，用上方速度档控制" : NOT_YET}
                 onClick={() => void advanceYear()}
               />
               <RoundAction

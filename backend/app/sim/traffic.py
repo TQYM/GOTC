@@ -16,6 +16,7 @@ from app.config import SimConfig
 from app.contracts.parcel import Parcel, Terrain
 from app.contracts.tile import Tile, TileType
 from app.sim.population import ResStat, manhattan
+from app.sim.transit import TransitManager
 
 JOB_TYPES = {TileType.COM_SHOP, TileType.COM_CBD, TileType.IND_LIGHT, TileType.IND_HEAVY}
 _ROAD_COST = 1.0
@@ -42,15 +43,24 @@ def _passable_and_cost(
         cells = {tuple(c) for c in tile.cells}
         if tile.type is TileType.UTIL_BRIDGE:
             bridge_cells |= cells
-        elif tile.type not in (TileType.TRANS_ROAD, TileType.TRANS_METRO):
+        elif tile.type not in (TileType.TRANS_ROAD, TileType.TRANS_AVENUE,
+                                TileType.TRANS_HIGHWAY, TileType.TRANS_METRO):
             built_cells |= cells
 
     passable = [[True] * size for _ in range(size)]
     cost = [[_GAP_COST] * size for _ in range(size)]
     capacity = [[tc.road_capacity] * size for _ in range(size)]
-    player_roads = {
-        tuple(cell) for tile in tiles if tile.type is TileType.TRANS_ROAD for cell in tile.cells
+    # 道路等级（C:S 的两车道/四车道/高速）：容量与代价逐级改善。
+    _ROAD_TYPES = {
+        TileType.TRANS_ROAD: (1.0, 1.0),
+        TileType.TRANS_AVENUE: (2.0, 0.85),
+        TileType.TRANS_HIGHWAY: (3.0, 0.70),
     }
+    road_level: dict[tuple[int, int], TileType] = {}
+    for tile in tiles:
+        if tile.type in _ROAD_TYPES:
+            for cell in tile.cells:
+                road_level[tuple(cell)] = tile.type
     for r in range(size):
         for c in range(size):
             t = parcel.terrain[r][c]
@@ -60,10 +70,14 @@ def _passable_and_cost(
             if (r, c) in built_cells:
                 passable[r][c] = False
                 continue
-            if t is Terrain.ROAD_INHERITED or (r, c) in player_roads:
-                cost[r][c] = _ROAD_COST
+            level = road_level.get((r, c))
+            if t is Terrain.ROAD_INHERITED or level is not None:
+                cost[r][c] = _ROAD_COST * (_ROAD_TYPES[level][1] if level else 1.0)
             if t is Terrain.ROAD_INHERITED:
                 capacity[r][c] = tc.highway_capacity
+            elif level is not None:
+                scale, _ = _ROAD_TYPES[level]
+                capacity[r][c] = int(tc.road_capacity * scale)
     return passable, cost, capacity
 
 
@@ -107,34 +121,50 @@ def _dijkstra_to_nearest_job(
 
 
 def compute_traffic(
-    parcel: Parcel, tiles: list[Tile], stats: list[ResStat], config: SimConfig
+    parcel: Parcel,
+    tiles: list[Tile],
+    stats: list[ResStat],
+    config: SimConfig,
+    transit: TransitManager | None = None,
+    commute_mult: float = 1.0,
 ) -> TrafficResult:
-    """全量交通重算：先分配负载，再按负载算 BPR 时间（单趟不迭代）。"""
+    """全量交通重算：先分配负载，再按负载算 BPR 时间（单趟不迭代）。
+
+    公共交通优先：若住宅与它最近的岗位之间能通过**同一条线路**的两个站
+    接驳，且总时间（两端步行 + 乘车）优于或等于步行上限，则改走公交/地铁，
+    不再占用道路负载——这正是 C:S 里修一条地铁能缓解拥堵的原因。
+    """
     tc = config.traffic
     job_tiles = [t for t in tiles if t.type in JOB_TYPES]
     total_occ = sum(s.occupancy for s in stats)
     if not job_tiles or total_occ <= 0:
         return TrafficResult(avg_commute=0, congestion=0.0, unreachable_share=0.0)
 
-    metros = [t.anchor for t in tiles if t.type is TileType.TRANS_METRO]
-    metro_radius = tc.metro_coverage_m // config.cell_size_m
+    # 注意：地铁站本身不载客——只有「线路接驳」才替代通勤。
+    # 旧逻辑「600m 内有地铁站 → 固定 8 分钟」会把站点当线路，已移除。
     passable, cost, capacity = _passable_and_cost(parcel, tiles, config)
     job_anchors = {tuple(t.anchor) for t in job_tiles}
 
+    stop_cells = {t.id: tuple(t.anchor) for t in tiles if t.type is TileType.TRANS_METRO}
     # 第一遍：分配需求，累计格负载
     loads: dict[tuple[int, int], float] = {}
     assignments: list[tuple[ResStat, list[tuple[int, int]] | None]] = []
+    transit_times: dict[int, float] = {}
     unreachable_occ = 0.0
-    for s in stats:
-        if any(manhattan(list(s.anchor), m) <= metro_radius for m in metros):
-            assignments.append((s, []))  # 地铁：固定 8 分钟，不走路径
-            continue
+    for index, s in enumerate(stats):
+        if transit is not None and job_anchors:
+            nearest_job = min(job_anchors, key=lambda a: manhattan(list(s.anchor), list(a)))
+            ride = transit.best_transit_minutes(tuple(s.anchor), nearest_job, stop_cells)
+            if ride is not None and ride <= MAX_COMMUTE_MIN:
+                transit_times[index] = ride
+                assignments.append((s, []))
+                continue
         path = _dijkstra_to_nearest_job(s.anchor, job_anchors, passable, cost)
         assignments.append((s, path))
         if path is None:
             unreachable_occ += s.occupancy
         else:
-            for cell in path[1:]:  # 起点不计负载
+            for cell in path[1:-1]:  # 起点与终点都不计负载（终点是建筑格，不是道路）
                 loads[cell] = loads.get(cell, 0.0) + s.occupancy
 
     # 第二遍：BPR 计时
@@ -147,15 +177,15 @@ def compute_traffic(
         return t0 * (1 + alpha * (v / cap) ** beta)
 
     weighted = 0.0
-    for s, path in assignments:
-        if path == []:  # 地铁
-            time_min = float(tc.metro_fixed_commute_min)
+    for index, (s, path) in enumerate(assignments):
+        if path == []:  # 公交线路或地铁
+            time_min = transit_times.get(index, float(tc.metro_fixed_commute_min))
         elif path is None:  # 不可达：曼哈顿自由流估计
             nearest = min(manhattan(list(s.anchor), list(a)) for a in job_anchors)
             time_min = nearest * t0
         else:
             time_min = sum(cell_time(cell) for cell in path[1:])
-        weighted += time_min * s.occupancy
+        weighted += time_min * commute_mult * s.occupancy
 
     avg = weighted / total_occ
     unreachable_share = unreachable_occ / total_occ

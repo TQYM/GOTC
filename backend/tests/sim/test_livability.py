@@ -230,13 +230,20 @@ class TestProjection:
         assert outcome.ending is Ending.ECO_PARADISE
 
     def test_thriving(self):
-        """res_mid + 轻工业（职住 900/855≈1.05）+ 地铁（通勤 8、拥堵 0）+ 学校/医院 → 幸福度 91。"""
+        """res_mid + 轻工业（职住 900/855≈1.05）+ 整条城市大道（容量 ×2）+ 学校/医院。"""
         tiles = [
             make_tile(TileType.RES_MID, [10, 10]),
             make_tile(TileType.IND_LIGHT, [10, 30]),
-            make_tile(TileType.TRANS_METRO, [10, 12]),
-            make_tile(TileType.EDU_SCHOOL, [10, 16]),
-            make_tile(TileType.MED_CLINIC, [10, 18]),
+            *[make_tile(TileType.TRANS_AVENUE, [10, c]) for c in range(11, 30)],
+            make_tile(TileType.EDU_SCHOOL, [8, 16]),
+            make_tile(TileType.MED_CLINIC, [8, 18]),
+            # 市政服务：警/消/垃圾/污水/电/水（缺一项幸福会掉）
+            make_tile(TileType.SRV_POLICE, [12, 18]),
+            make_tile(TileType.SRV_FIRE, [12, 21]),
+            make_tile(TileType.SRV_GARBAGE, [14, 18]),
+            make_tile(TileType.SRV_SEWAGE, [14, 21]),
+            make_tile(TileType.SRV_POWER, [16, 18]),
+            make_tile(TileType.SRV_WATER, [16, 21]),
         ]
         outcome = run_projection(
             make_parcel(), tiles, CONFIG, funds=5_000_000, start_year=4, cleared_forest=False
@@ -271,8 +278,9 @@ class TestEngineIntegration:
     def test_full_metrics_live(self):
         tiles = [make_tile(TileType.IND_HEAVY, [10, 10]), make_tile(TileType.RES_MID, [10, 12])]
         m = engine.recompute(make_parcel(), tiles, CONFIG, funds=5_000_000)
-        assert m.pollution == 0.25
-        assert m.happiness == 45
+        # 2026-11：市政服务覆盖率不足会叠加污染加成，故用下界断言
+        assert m.pollution >= 0.25
+        assert m.happiness <= 45
         assert m.coverage_edu == 0.0
 
     def test_event_modifier_applied(self):

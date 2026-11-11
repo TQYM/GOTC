@@ -22,6 +22,7 @@ import {
 import { buildTerrain } from "./terrainGeometry";
 import { cellFrameGeometry, tileGeometry, treeGeometry } from "./tileModels";
 import { toonMaterial } from "./toon";
+import { useGame } from "@/store/game";
 
 const tmp = new THREE.Object3D();
 
@@ -250,15 +251,17 @@ function TileTypeMesh({
   type,
   tiles,
   material,
+  tint,
 }: {
   parcel: Parcel;
   type: TileType;
   tiles: Tile[];
   material: THREE.Material;
+  tint: string | null;
 }) {
   const geometry = useMemo(
-    () => tileGeometry(type, parcel.cell_size_m),
-    [type, parcel.cell_size_m],
+    () => tileGeometry(type, parcel.cell_size_m, tint),
+    [type, parcel.cell_size_m, tint],
   );
   const ref = useRef<THREE.InstancedMesh>(null);
   useLayoutEffect(() => {
@@ -278,6 +281,43 @@ function TileTypeMesh({
   );
 }
 
+/** 全城指标 → 视图色（0 差 → 1 好） */
+function infoTint(
+  view: string,
+  metrics: {
+    land_price_index: number;
+    pollution: number;
+    congestion: number;
+    happiness?: number;
+    jobs?: number;
+    population?: number;
+  } | null,
+): string | null {
+  if (view === "default" || !metrics) return null;
+  if (view === "landprice") {
+    const v = Math.max(0, Math.min(1, metrics.land_price_index / 100));
+    // 绿 → 黄 → 红
+    return v > 0.66 ? "#3DD68C" : v > 0.33 ? "#FFC93C" : "#FF4F5E";
+  }
+  if (view === "pollution") {
+    // pollution 契约是 0..1（不是百分数）
+    const v = Math.max(0, Math.min(1, metrics.pollution));
+    return v > 0.5 ? "#8B5A2B" : v > 0.25 ? "#C9A227" : "#7CCBFF";
+  }
+  if (view === "happiness") {
+    const v = Math.max(0, Math.min(1, (metrics.happiness ?? 50) / 100));
+    return v > 0.66 ? "#3DD68C" : v > 0.4 ? "#FFC93C" : "#FF4F5E";
+  }
+  if (view === "jobs") {
+    const ratio = (metrics.jobs ?? 0) / Math.max(1, metrics.population ?? 1);
+    const v = Math.max(0, Math.min(1, ratio));
+    return v > 0.8 ? "#3DD68C" : v > 0.5 ? "#FFC93C" : "#FF4F5E";
+  }
+  // congestion 契约是「路网负载 / 容量」，多数情况 0..1（BPR 下可略超 1）
+  const v = Math.max(0, Math.min(1, metrics.congestion));
+  return v > 0.6 ? "#FF4F5E" : v > 0.3 ? "#FFB020" : "#3CCB6E";
+}
+
 export function TileLayer({
   parcel,
   tiles,
@@ -286,6 +326,9 @@ export function TileLayer({
   tiles: Tile[];
 }) {
   const material = useMemo(() => toonMaterial({ vertexColors: true }), []);
+  const infoView = useGame((s) => s.infoView);
+  const metrics = useGame((s) => s.metrics);
+  const tint = infoTint(infoView, metrics);
   const groups = useMemo(() => {
     const m = new Map<TileType, Tile[]>();
     for (const t of tiles) {
@@ -300,12 +343,59 @@ export function TileLayer({
       {groups.map(([type, list]) => (
         // 数量变化时以新 key 重建 InstancedMesh（实例容量在构造时固定）
         <TileTypeMesh
-          key={`${type}:${list.length}`}
+          key={`${type}:${list.length}:${tint ?? "base"}`}
           parcel={parcel}
           type={type}
           tiles={list}
           material={material}
+          tint={tint}
         />
+      ))}
+    </group>
+  );
+}
+
+/* ---------------------------------------------------- 服务覆盖圈 */
+
+/**
+ * 学校 / 医院的服务半径圈（C:S 的「服务覆盖」视图）。
+ * 半径与后端 coverage.py 的 COVERAGE_RADIUS_M = 600 保持一致，
+ * 否则玩家看到的圈和算出来的覆盖率会对不上。
+ */
+export function ServiceRings({ parcel, tiles }: { parcel: Parcel; tiles: Tile[] }) {
+  const grid = gridOf(parcel);
+  const rings = useMemo(() => {
+    const out: { x: number; z: number; radius: number; color: string }[] = [];
+    for (const tile of tiles) {
+      if (tile.type !== "edu_school" && tile.type !== "med_clinic") continue;
+      const [x, z] = cellToWorld(grid, tile.anchor[0], tile.anchor[1]);
+      out.push({
+        x,
+        z,
+        radius: 600,
+        color: tile.type === "edu_school" ? "#3D8BFF" : "#FF5C7A",
+      });
+    }
+    return out;
+  }, [grid, tiles]);
+
+  if (rings.length === 0) return null;
+  return (
+    <group>
+      {rings.map((ring, i) => (
+        <mesh
+          key={`${ring.x}:${ring.z}:${i}`}
+          position={[ring.x, 1.2, ring.z]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <ringGeometry args={[ring.radius - 8, ring.radius, 72]} />
+          <meshBasicMaterial
+            color={ring.color}
+            transparent
+            opacity={0.45}
+            depthWrite={false}
+          />
+        </mesh>
       ))}
     </group>
   );
@@ -557,4 +647,59 @@ export function BuildableLayer({
   }, [cells, parcel]);
   if (cells.length === 0) return null;
   return <instancedMesh ref={ref} args={[geometry, material, cells.length]} renderOrder={1} />;
+}
+
+/** 公共交通线路（C:S 的 TransportLine）：站间连线，颜色随线路。 */
+export function TransitLines({
+  parcel,
+  tiles,
+  transit,
+}: {
+  parcel: Parcel;
+  tiles: Tile[];
+  transit: { lid: number; color: string; stops: string[] }[];
+}) {
+  const grid = gridOf(parcel);
+  const segments = useMemo(() => {
+    const anchors = new Map(tiles.map((tile) => [tile.id, tile.anchor]));
+    const out: { key: string; x: number; z: number; len: number; angle: number; color: string }[] = [];
+    for (const line of transit) {
+      const points = line.stops
+        .map((id) => anchors.get(id))
+        .filter((anchor): anchor is [number, number] => Boolean(anchor));
+      for (let i = 1; i < points.length; i += 1) {
+        const prev = points[i - 1]!;
+        const next = points[i]!;
+        const [x1, z1] = cellToWorld(grid, prev[0], prev[1]);
+        const [x2, z2] = cellToWorld(grid, next[0], next[1]);
+        const dx = x2 - x1;
+        const dz = z2 - z1;
+        out.push({
+          key: `${line.lid}-${i}`,
+          x: (x1 + x2) / 2,
+          z: (z1 + z2) / 2,
+          len: Math.hypot(dx, dz),
+          angle: Math.atan2(dx, dz),
+          color: line.color,
+        });
+      }
+    }
+    return out;
+  }, [grid, tiles, transit]);
+
+  if (segments.length === 0) return null;
+  return (
+    <group>
+      {segments.map((segment) => (
+        <mesh
+          key={segment.key}
+          position={[segment.x, 2.0, segment.z]}
+          rotation={[0, segment.angle, 0]}
+        >
+          <boxGeometry args={[6, 0.6, segment.len]} />
+          <meshBasicMaterial color={segment.color} transparent opacity={0.75} />
+        </mesh>
+      ))}
+    </group>
+  );
 }

@@ -20,7 +20,15 @@ class TileType(StrEnum):
     MED_CLINIC = "med_clinic"
     TRANS_METRO = "trans_metro"
     TRANS_ROAD = "trans_road"
+    TRANS_AVENUE = "trans_avenue"
+    TRANS_HIGHWAY = "trans_highway"
     UTIL_BRIDGE = "util_bridge"
+    SRV_POLICE = "srv_police"
+    SRV_FIRE = "srv_fire"
+    SRV_GARBAGE = "srv_garbage"
+    SRV_SEWAGE = "srv_sewage"
+    SRV_POWER = "srv_power"
+    SRV_WATER = "srv_water"
 
 
 class Tile(BaseModel):
@@ -31,6 +39,10 @@ class Tile(BaseModel):
     orientation: Literal["horizontal", "vertical"] | None = None
     built_at_year: int = Field(ge=1)
     upkeep: int = Field(ge=0)
+    # C:S 的 Historical 标志：钉住单栋，退出「拆旧建新」与升级
+    historical: bool = False
+    # C:S 允许给单栋建筑改名（自定义名称是存档的一部分）
+    name: str | None = None
 
     @model_validator(mode="after")
     def _check_bridge_orientation(self) -> "Tile":

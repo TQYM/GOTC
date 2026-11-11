@@ -23,7 +23,9 @@ import { coreRectWorld } from "@/lib/map/coreArea";
 import { SCENE_COLORS } from "@/lib/palette";
 import CameraRig from "./CameraRig";
 import PixelPass from "./PixelPass";
+import { CitizenDots } from "./CitizenDots";
 import RealCityLayers from "./RealCityLayers";
+import { useGame } from "@/store/game";
 import { usePrefs } from "@/store/prefs";
 import {
   boardAnchorOnMap,
@@ -43,6 +45,8 @@ import {
   TerrainLayer,
   BuildableLayer,
   TileLayer,
+  ServiceRings,
+  TransitLines,
   type GhostSpec,
 } from "./layers";
 import AmbientTraffic from "./AmbientTraffic";
@@ -358,6 +362,7 @@ export default function CityScene3D({
   pixelScale,
   className,
 }: CityScene3DProps) {
+  const transit = useGame((state) => state.transit);
   const prefScale = usePrefs((s) => s.pixelScale);
   const hydratePrefs = usePrefs((s) => s.hydrate);
   useEffect(() => hydratePrefs(), [hydratePrefs]);
@@ -380,6 +385,7 @@ export default function CityScene3D({
     (p: MapPick | null) => setPick(p && map ? { map, pick: p } : null),
     [map],
   );
+  const citizenPopulation = useGame((state) => state.metrics?.population ?? 0);
   const boardExtent = parcel.size * parcel.cell_size_m;
 
   // 全域几何：地表采样器、沙盘锚点（CBD 片区）与世界偏移
@@ -649,6 +655,9 @@ export default function CityScene3D({
             <OccupiedLayer parcel={parcel} />
           )}
           <TileLayer parcel={parcel} tiles={tiles} />
+          <ServiceRings parcel={parcel} tiles={tiles} />
+          <CitizenDots parcel={parcel} tiles={tiles} population={citizenPopulation} />
+        <TransitLines parcel={parcel} tiles={tiles} transit={transit} />
           {showBuildable ? (
             <BuildableLayer
               parcel={parcel}

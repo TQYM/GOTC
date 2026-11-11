@@ -29,6 +29,8 @@ class SaveState(BaseModel):
     city_year: int = Field(ge=1)
     phase: Phase
     last_seq: int = Field(ge=0)
+    districts: list[dict] = Field(default_factory=list)
+    transit: list[dict] = Field(default_factory=list)
 
 
 class OperationRequest(BaseModel):
@@ -38,6 +40,80 @@ class OperationRequest(BaseModel):
 
 class SavePlaceRequest(PlaceRequest, OperationRequest):
     pass
+
+
+class DistrictRequest(BaseModel):
+    name: str = Field(default="", max_length=40)
+    anchor: list[int]
+    rows: int = Field(default=1, ge=1, le=16)
+    cols: int = Field(default=1, ge=1, le=16)
+    client_op_id: str = Field(min_length=1, max_length=80)
+
+
+class RenameRequest(BaseModel):
+    tile_id: str
+    name: str | None = Field(default=None, max_length=32)
+    client_op_id: str
+
+
+class HistoricalRequest(BaseModel):
+    tile_id: str
+    historical: bool = True
+    client_op_id: str
+
+
+class RelocateRequest(BaseModel):
+    tile_id: str
+    anchor: list[int] = Field(min_length=2, max_length=2)
+    client_op_id: str
+
+
+class CityPolicyRequest(BaseModel):
+    policy: str
+    enabled: bool = True
+    client_op_id: str
+
+
+class DistrictPolicyRequest(BaseModel):
+    did: int = Field(ge=1)
+    policy: str
+    enabled: bool = True
+    client_op_id: str = Field(min_length=1, max_length=80)
+
+
+class ZoneRequest(SavePlaceRequest):
+    """批量划区：C:S 的拖拽刷子，一次铺 rows×cols 片同类区块。"""
+
+    rows: int = Field(default=1, ge=1, le=16)
+    cols: int = Field(default=1, ge=1, le=16)
+
+
+class TransitLineRequest(BaseModel):
+    """建线：C:S 的 TransportTool 画线，这里直接给有序站点列表。"""
+
+    name: str = Field(default="", max_length=40)
+    kind: str = Field(pattern="^(bus|metro)$")
+    stops: list[str] = Field(min_length=2, max_length=32)
+    color: str = Field(default="#3D8BFF", max_length=16)
+    client_op_id: str = Field(min_length=1, max_length=80)
+
+
+class TransitStopRequest(BaseModel):
+    lid: int = Field(ge=1)
+    tile_id: str = Field(min_length=1, max_length=64)
+    index: int | None = Field(default=None, ge=0, le=32)
+    client_op_id: str = Field(min_length=1, max_length=80)
+
+
+class TransitPriceRequest(BaseModel):
+    lid: int = Field(ge=1)
+    price: float = Field(ge=0, le=20)
+    client_op_id: str = Field(min_length=1, max_length=80)
+
+
+class TransitDeleteRequest(BaseModel):
+    lid: int = Field(ge=1)
+    client_op_id: str = Field(min_length=1, max_length=80)
 
 
 class SaveRemoveRequest(OperationRequest):
@@ -67,7 +143,20 @@ class RedevelopmentResult(BaseModel):
 
 class OperationResult(BaseModel):
     seq: int = Field(ge=1)
-    op_type: Literal["place", "remove", "redevelop", "advance"]
+    op_type: Literal[
+        "place",
+        "remove",
+        "redevelop",
+        "advance",
+        "zone",
+        "district",
+        "city_policy", "historical", "rename", "relocate",
+        "district_policy",
+        "transit_line",
+        "transit_stop",
+        "transit_price",
+        "transit_delete",
+    ]
     client_op_id: str
     payload: dict[str, Any]
     tile: Tile | None = None

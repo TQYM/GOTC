@@ -422,6 +422,8 @@ function tileModel(type: TileType): DrawItem[] {
       box({ r0: 0.83, c0: 0.07, r1: 0.94, c1: 0.18 }, 0, 9, CATEGORY_FACES.utility);
       box({ r0: 0.79, c0: 0.03, r1: 0.98, c1: 0.22 }, 9, 12, f);
       break;
+    case "trans_avenue":
+    case "trans_highway":
     case "trans_road":
       out.push({ k: key, s: out.length, oc: null, car: { r: 0.6, c: 0.45 } });
       break;
@@ -443,7 +445,7 @@ export function tileSprite(type: TileType): Sprite {
   const S = mkScene(24, 28, 12, 17);
   plinth(S, 1, 3);
   const ground =
-    type === "trans_road" ? SCENE_COLORS.asphalt : type === "util_bridge" ? SCENE_COLORS.water : "#9BDE6E";
+    type === "trans_road" || type === "trans_avenue" || type === "trans_highway" ? SCENE_COLORS.asphalt : type === "util_bridge" ? SCENE_COLORS.water : "#9BDE6E";
   poly(S, [P(S, 0, 0), P(S, 0, 1), P(S, 1, 1), P(S, 1, 0)], ground, 1);
   if (type === "trans_road") line(S, P(S, 0.25, 0.5), P(S, 0.55, 0.5), PX.paper, 1);
   if (type === "util_bridge") {

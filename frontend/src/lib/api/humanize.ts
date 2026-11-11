@@ -10,10 +10,12 @@ export interface HumanError {
   retryable?: boolean;
 }
 
-const yuan = (n: number) =>
-  Math.abs(n) >= 10_000
-    ? `${(n / 10_000).toFixed(n % 10_000 === 0 ? 0 : 1)} 万`
-    : `${n} 元`;
+const yuan = (n: number) => {
+  // 真实片区的财政规模会到亿级，只到「万」会显示成 3198681.1 万这种天文数字。
+  if (Math.abs(n) >= 100_000_000) return `${(n / 100_000_000).toFixed(2)} 亿`;
+  if (Math.abs(n) >= 10_000) return `${(n / 10_000).toFixed(n % 10_000 === 0 ? 0 : 1)} 万`;
+  return `${n} 元`;
+};
 
 export function humanizeError(
   err: ApiError,

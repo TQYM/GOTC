@@ -245,6 +245,21 @@ function make(type: TileType, s: number): THREE.BufferGeometry {
         .slab(1.6, 0.7, s * 0.28, SCENE_COLORS.accentLight, 0, 0, -s * 0.3)
         .slab(1.6, 0.7, s * 0.28, SCENE_COLORS.accentLight, 0, 0, s * 0.3);
       break;
+    case "trans_avenue":
+      // 四车道：路面更宽、双黄线、两侧人行道
+      p.slab(s, 0.6, s, SCENE_COLORS.asphalt)
+        .slab(1.6, 0.75, s * 0.12, SCENE_COLORS.accentLight, 0, 0, -s * 0.08)
+        .slab(1.6, 0.75, s * 0.12, SCENE_COLORS.accentLight, 0, 0, s * 0.08)
+        .slab(s * 0.08, 0.9, s, tint(SCENE_COLORS.asphalt, 0.75), -s * 0.46, 0.05)
+        .slab(s * 0.08, 0.9, s, tint(SCENE_COLORS.asphalt, 0.75), s * 0.46, 0.05);
+      break;
+    case "trans_highway":
+      // 高速：中央隔离带 + 护栏，路面抬高一档便于辨认
+      p.slab(s, 0.8, s, SCENE_COLORS.asphalt)
+        .slab(s * 0.06, 1.0, s, SCENE_COLORS.accentLight, 0, 0.1)
+        .slab(s * 0.08, 1.4, s, tint(SCENE_COLORS.asphalt, 0.55), -s * 0.47, 0.3)
+        .slab(s * 0.08, 1.4, s, tint(SCENE_COLORS.asphalt, 0.55), s * 0.47, 0.3);
+      break;
     case "util_bridge":
       // 沿 x 方向 1 格长；实例按跨度缩放 x，竖向桥绕 y 旋转 90°
       p.slab(s, 2, 30, base, 0, 2)
@@ -258,13 +273,36 @@ function make(type: TileType, s: number): THREE.BufferGeometry {
 
 const cache = new Map<string, THREE.BufferGeometry>();
 
+/**
+ * 信息视图着色：保留 15% 原色，让楼体仍有明暗层次。
+ * 与 C:S 的 InfoManager 视图同构——切到地价/污染/交通时整片楼改色，
+ * 但保留轮廓可辨。
+ */
+function tintGeometry(geometry: THREE.BufferGeometry, color: string): void {
+  const attr = geometry.getAttribute("color");
+  if (!attr) return;
+  const tint = new THREE.Color(color);
+  for (let i = 0; i < attr.count; i += 1) {
+    const r = attr.getX(i) * 0.15 + tint.r * 0.85;
+    const g = attr.getY(i) * 0.15 + tint.g * 0.85;
+    const b = attr.getZ(i) * 0.15 + tint.b * 0.85;
+    attr.setXYZ(i, r, g, b);
+  }
+  attr.needsUpdate = true;
+}
+
 export function tileGeometry(
   type: TileType,
   cellSize: number,
+  tint?: string | null,
 ): THREE.BufferGeometry {
-  const key = `${type}@${cellSize}`;
+  const key = tint ? `${type}@${cellSize}@${tint}` : `${type}@${cellSize}`;
   let g = cache.get(key);
-  if (!g) cache.set(key, (g = make(type, cellSize)));
+  if (!g) {
+    g = make(type, cellSize);
+    if (tint) tintGeometry(g, tint);
+    cache.set(key, g);
+  }
   return g;
 }
 

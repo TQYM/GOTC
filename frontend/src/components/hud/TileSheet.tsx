@@ -94,11 +94,14 @@ export default function TileSheet() {
   const busy = useGame((s) => s.busy);
   const existingAssets = useGame((s) => s.existingAssets);
   const buildAt = useGame((s) => s.buildAt);
+  const zoneAt = useGame((s) => s.zoneAt);
   const selectAt = useGame((s) => s.selectAt);
   const requestRemoveAt = useGame((s) => s.requestRemoveAt);
   const demolishExisting = useGame((s) => s.demolishExisting);
 
   const [cat, setCat] = useState<TileCategory | "all">("all");
+  /** 刷子边长：1 表示单点建造，>1 走批量划区（C:S 的拖拽刷子） */
+  const [brush, setBrush] = useState(1);
   const [confirmDemolish, setConfirmDemolish] = useState(false);
 
   if (!selected || !parcel) return null;
@@ -285,6 +288,27 @@ export default function TileSheet() {
               ))}
             </div>
 
+            <div className="flex items-center gap-2" role="group" aria-label="刷子大小">
+              <span className="text-xs text-[var(--px-ink-soft)]">刷子</span>
+              {[1, 2, 3].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  aria-pressed={brush === n}
+                  data-testid={`brush-${n}`}
+                  onClick={() => setBrush(n)}
+                  className="px-tab tabular-nums"
+                >
+                  {n}×{n}
+                </button>
+              ))}
+              {brush > 1 ? (
+                <span className="text-[11px] text-[var(--px-ink-soft)]">
+                  点一下铺满 {brush}×{brush}
+                </span>
+              ) : null}
+            </div>
+
             <div className="grid gap-3 p-0.5">
               {list.map((type) => {
                 const spec = TILE_SPECS[type];
@@ -296,7 +320,11 @@ export default function TileSheet() {
                     type="button"
                     data-testid={`sheet-build-${type}`}
                     disabled={blocked}
-                    onClick={() => void buildAt(type, selected)}
+                    onClick={() =>
+                      void (brush > 1
+                        ? zoneAt(type, [row, col], brush, brush)
+                        : buildAt(type, selected))
+                    }
                     className="px-card flex items-center gap-2.5 px-2 py-1.5 text-left"
                   >
                     <TileThumb type={type} scale={1} />

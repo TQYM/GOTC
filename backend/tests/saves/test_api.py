@@ -103,7 +103,11 @@ def test_place_advance_project_report_history(client: TestClient):
     year = advanced.json()
     assert year["seq"] == 2
     assert year["city_year"] == 2
-    assert year["metrics"]["population"] == 72  # 900×8%
+    # 帧制模型（C:S 结构）：一年 = 3600 帧 / 闸门每 8 帧 = 450 次落成机会，
+    # 单 tile 900 容量在这 450 次内会被需求概率逐步填满，不再是「900×8%」的年度跳变。
+    # 一年 3600 帧 = 450 次落成机会；地价够高时住宅会继续升级（res_low→mid→high，
+    # 容量 300→900→2400），所以这里只要求「长出了人」而不锁上界。
+    assert 0 < year["metrics"]["population"]
     assert year["annual_events"] == []
 
     before_project = client.get(f"/api/saves/{code}").json()

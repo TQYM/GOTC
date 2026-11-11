@@ -9,7 +9,7 @@ export default function ReportHistory({ onClose }: { onClose: () => void }) {
   const openReport = useGame((s) => s.openReport);
   return (
     <section
-      className="px-panel px-anim-slide-right pointer-events-auto absolute right-4 top-[8.5rem] z-20 max-h-[70vh] w-[min(25rem,calc(100%-1.5rem))] overflow-y-auto p-4"
+      className="px-panel px-anim-slide-right pointer-events-auto absolute right-4 top-[8.5rem] z-40 max-h-[70vh] w-[min(25rem,calc(100%-1.5rem))] overflow-y-auto p-4"
       data-testid="report-history"
       aria-label="历史城市报告"
     >

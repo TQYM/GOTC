@@ -58,6 +58,8 @@ TILE_NAMES = {
     "ind_light": "轻工业",
     "ind_heavy": "重工业",
     "trans_road": "道路",
+    "trans_avenue": "城市大道",
+    "trans_highway": "城市高速",
     "trans_metro": "地铁站",
     "util_bridge": "跨河桥",
     "green_park": "公园",

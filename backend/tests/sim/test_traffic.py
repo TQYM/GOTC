@@ -82,16 +82,17 @@ class TestBPR:
         assert result.avg_commute == 0
         assert result.congestion == 0.0
 
-    def test_metro_fixed_commute(self):
-        """地铁 600m（12 格）内：固定 8 分钟，不累计负载。"""
+    def test_metro_station_alone_does_not_carry(self):
+        """只有站点、没有线路时不替代通勤（C:S 的站点必须挂在线路上才载客）。"""
         tiles = [
             make_tile(TileType.RES_MID, [10, 10]),
             make_tile(TileType.COM_SHOP, [10, 20]),
             make_tile(TileType.TRANS_METRO, [10, 14]),
         ]
         result = traffic_of(make_parcel(), tiles)
-        assert result.avg_commute == 8
-        assert result.congestion == 0.0
+        # 没有线路 → 出行仍占用道路（有负载），不会被站点「魔法」掉
+        assert result.congestion > 0.0
+        assert result.unreachable_share == 0.0
 
 
 class TestRiverCrossing:

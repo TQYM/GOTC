@@ -162,8 +162,16 @@
 | `POST /api/saves/{city_code}/start` | `{}` | SaveState；briefing→building，重复调用返回当前状态 |
 | `POST …/place` | `{type, anchor, orientation?, client_op_id, base_seq}` | OperationResult |
 | `POST …/remove` | `{tile_id, client_op_id, base_seq}` | OperationResult |
+| `POST …/district` | `{name, anchor, rows: 1..16, cols: 1..16, client_op_id}` | OperationResult（`op_type="district"`）；矩形圈地，只收已存在地块，等价于 C:S 的行政区刷子 |
+| `POST …/district/policy` | `{did, policy, enabled, client_op_id}` | OperationResult（`op_type="district_policy"`）；6 条政策，互斥组自动替换 |
+| `POST …/historical` | `{tile_id, historical: true, client_op_id}` | OperationResult（`op_type="historical"`）；C:S 的 Historical 标志，钉住单栋退出升级 |
+| `POST …/rename` | `{tile_id, name: 0..32 字, client_op_id}` | OperationResult（`op_type="rename"`）；建筑自定义名称，空串表示清除 |
+| `POST …/zone` | `{type, anchor, rows: 1..16, cols: 1..16, client_op_id}` | OperationResult（`op_type="zone"`）；逐格放置、越界/占用/资金不足只跳过不报错，等价于 C:S 的拖拽刷子 |
 | `POST …/redevelop` | `{anchor, client_op_id, base_seq}` | OperationResult + redevelopment |
 | `POST …/advance` | `{client_op_id, base_seq}` | OperationResult，城市年份 +1 并写回 |
+| `POST …/speed` | `{speed: 0\|1\|2\|3}` | SimTickEvent；0=暂停，1/2/3 对应 1/2/4 帧每 tick（复刻 C:S 的 3x=4 帧） |
+| `POST …/tax` | `{service: residential\|commercial\|industrial\|office\|utility, rate: 1..29}` | `{service, rate, view}`；税率四维模型的扁平版（C:S 的 182 类在 CITY20 收敛为 5 类） |
+| `POST …/loan` | `{amount: 10000..20000000, months?: 12..120 = 60, rate_bp?: 0..3000 = 500}` | `{principal, remaining, monthly_payment, months, rate_bp, view}`；本金即时到账，按剩余期数摊销本息 |
 | `POST …/project` | `{years?=10}` | ProjectionResult，不写回 |
 | `POST …/report` | `{}` | ReportResult，写报告历史，不写领域 op |
 | `GET …/reports` | — | `{reports: ReportResult[]}`，新到旧，最多 20 |
@@ -191,6 +199,11 @@
 | `mentor` | comment/theory_refs/severity/top_issues/source |
 | `projection_step` | ProjectionYear + projection_id/base_year/base_seq |
 | `report_ready` | 完整 ReportResult |
+| `sim_tick` | `{frame,year,speed,paused,hour,demand{residential,commercial,workplace},
+builds_total,citizens{population,agents,scale,avg_age,avg_happiness,avg_commute,employment_rate,education_dist,age_dist},districts[{did,name,tiles[],policies[]}],budget{funds,day_income,day_expenses,debt,tax_rates,income_by_service,expenses_by_service},metrics}`；实时循环每 8 tick 广播一次（约 0.67 秒），暂停时仍发但 `frame` 不前进 |
+| `speed_change` | 同 `sim_tick` 形状；`POST …/speed` 后立即广播 |
+| `tax_change` | 同 `sim_tick` 形状；`POST …/tax` 后立即广播 |
+| `budget_change` | 同 `sim_tick` 形状；`POST …/loan` 后立即广播 |
 | `error` | `{code,message}` |
 
 恢复规则：
@@ -210,6 +223,6 @@
 
 ## 6. 持久化最小状态
 
-快照/重放必须覆盖：parcel 与数据版本、完整 SimConfig、tiles、现状资产及维护费、实际入住、资金、city_year、phase、forest/环境事件、低幸福度连续年数、redeveloped 资产与惩罚期限、last_seq。ops 同时保存规范命令 payload 与首次 `result_json`；每 50 op 打快照，恢复为「最近快照 + 增量重放」。
+快照/重放必须覆盖：parcel 与数据版本、完整 SimConfig、tiles、现状资产及维护费、实际入住、资金、city_year、phase、forest/环境事件、低幸福度连续年数、redeveloped 资产与惩罚期限、last_seq，以及 C:S 结构的模拟状态：`clock{frame,speed}`、`demand{actual_*,displayed_*}`、`gate{open_interval,last_window}`、`built{tile_id: 0..1}`、`builds_total`、`builds_by_type`、`budget{income[16],expenses[16],tax_rates,loans,day_income,day_expenses,last_day}`，两个浮点累加器 `income_accum`/`expense_accum`（攒够 1 元才落账，避免每帧取整丢失），行政区 `districts{next_id,districts[{did,name,tiles[],policies[]}]}`（C:S 的 `DistrictManager`：id 单调递增、政策是位标志、互斥组见下），以及市民代理池 `citizens{population,scale,next_id,agents[]}`（C:S 三级市民结构的抽样版：每个代理代表 `scale` 人，含年龄/教育/就业/幸福/通勤；生命周期用确定性哈希推进，保证 replay 与在线一致）。ops 同时保存规范命令 payload 与首次 `result_json`；每 50 op 打快照，恢复为「最近快照 + 增量重放」。
 
 当前契约版本为 **v2**；后续破坏性变更必须继续升版本并提供迁移说明。

@@ -28,7 +28,15 @@ export type TileType =
   | "med_clinic"
   | "trans_metro"
   | "trans_road"
-  | "util_bridge";
+  | "trans_avenue"
+  | "trans_highway"
+  | "util_bridge"
+  | "srv_police"
+  | "srv_fire"
+  | "srv_garbage"
+  | "srv_sewage"
+  | "srv_power"
+  | "srv_water";
 
 /** 02 §5：saves v2 持久化只用 briefing/building；projecting/report 为本端视图，其余为 v1 兼容。 */
 export type Phase =
@@ -96,6 +104,9 @@ export interface Tile {
   orientation?: BridgeOrientation | null;
   built_at_year: number;
   upkeep: number;
+  /** C:S 的 Historical 标志：钉住单栋，退出升级 */
+  historical?: boolean;
+  name?: string | null;
 }
 
 /** 02 §3.3 放置请求；桥必须带 orientation，普通区块不允许带 */

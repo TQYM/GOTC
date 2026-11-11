@@ -98,7 +98,15 @@ const UPKEEP: Record<Tile["type"], number> = {
   med_clinic: 120_000,
   trans_metro: 200_000,
   trans_road: 2_000,
+  trans_avenue: 4_000,
+  trans_highway: 8_000,
   util_bridge: 10_000,
+  srv_police: 60_000,
+  srv_fire: 70_000,
+  srv_garbage: 55_000,
+  srv_sewage: 65_000,
+  srv_power: 110_000,
+  srv_water: 90_000,
 };
 
 function compute(
@@ -127,6 +135,14 @@ function compute(
   ).toFixed(3);
   const roads =
     count((t) => t.type === "trans_road") +
+    count((t) => t.type === "trans_avenue") +
+    count((t) => t.type === "trans_highway") +
+    count((t) => t.type === "srv_police") +
+    count((t) => t.type === "srv_fire") +
+    count((t) => t.type === "srv_garbage") +
+    count((t) => t.type === "srv_sewage") +
+    count((t) => t.type === "srv_power") +
+    count((t) => t.type === "srv_water") +
     count((t) => t.type === "trans_metro") * 8;
   // 离线包带着 929 万既有人口，直接套沙盒公式会瞬间爆表：用既有路网的基线拥堵
   const congestion = OFFLINE

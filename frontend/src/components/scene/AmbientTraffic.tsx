@@ -201,7 +201,8 @@ export default function AmbientTraffic({
 
   const walkerCount = Math.max(0, Math.min(MAX_WALKERS, Math.round(population / 40) || 8));
   const carCount = Math.max(0, Math.min(MAX_CARS, Math.round(jobs / 130) || 4));
-  const speedScale = Math.max(0.35, 1 - congestion / 160);
+  // congestion 是 0..1 的负载比，不是百分数
+  const speedScale = Math.max(0.35, 1 - Math.min(1, congestion) * 0.6);
   const moodScale = happiness >= 58 ? 1.12 : happiness >= 42 ? 1 : 0.66;
 
   // 三个配色的 instanced mesh

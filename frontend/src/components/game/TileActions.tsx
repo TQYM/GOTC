@@ -1,0 +1,91 @@
+"use client";
+
+/**
+ * 选中地块的快捷操作（对标 C:S 的「建筑信息面板 → 历史建筑」）。
+ *
+ * C:S 的 Historical 标志作用是钉住单栋：它不阻止手动拆除，只让这一栋
+ * 退出「拆旧建新」与等级升级。这里保持同样的语义。
+ */
+
+import { useState } from "react";
+import { useGame, tileAt } from "@/store/game";
+
+export function TileActions() {
+  const selected = useGame((s) => s.selected);
+  const tiles = useGame((s) => s.tiles);
+  const api = useGame((s) => s.api);
+  const busy = useGame((s) => s.busy);
+  const markHistorical = useGame((s) => s.setHistorical);
+  const renameTile = useGame((s) => s.renameTile);
+  const relocateTile = useGame((s) => s.relocateTile);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  if (!selected) return null;
+  const tile = tileAt(tiles, selected);
+  if (!tile) return null;
+
+  return (
+    <div className="pointer-events-auto flex items-center gap-2 rounded-md bg-black/45 px-2.5 py-1.5 text-xs text-white/85 backdrop-blur">
+      <span className="opacity-70">{tile.name ?? tile.id.slice(-4)}</span>
+      {editing ? (
+        <input
+          autoFocus
+          value={draft}
+          maxLength={32}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            void renameTile(tile.id, draft);
+            setEditing(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              void renameTile(tile.id, draft);
+              setEditing(false);
+            }
+            if (e.key === "Escape") setEditing(false);
+          }}
+          className="w-24 bg-white/10 px-1.5 py-0.5 outline-none"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(tile.name ?? "");
+            setEditing(true);
+          }}
+          className="px-1.5 py-0.5 text-white/60 hover:text-white"
+        >
+          改名
+        </button>
+      )}
+      <button
+        type="button"
+        disabled={busy || !api}
+        onClick={() => {
+          const input = window.prompt("搬迁到哪个格？输入 r,c", `${tile.anchor[0] + 2},${tile.anchor[1]}`);
+          if (!input) return;
+          const [r, c] = input.split(",").map((part) => Number(part.trim()));
+          if (!Number.isInteger(r) || !Number.isInteger(c)) return;
+          void relocateTile(tile.id, [r, c]);
+        }}
+        className="px-1.5 py-0.5 text-white/60 hover:text-white"
+        title="搬迁保留建成度、名称与历史标志"
+      >
+        搬迁
+      </button>
+      <button
+        type="button"
+        disabled={busy || !api}
+        onClick={() => void markHistorical(tile.id, !tile.historical)}
+        className={`px-2 py-0.5 ${
+          tile.historical
+            ? "bg-amber-500/80 text-black"
+            : "bg-white/10 text-white/80 hover:bg-white/20"
+        }`}
+      >
+        {tile.historical ? "★ 历史建筑" : "☆ 标记历史"}
+      </button>
+    </div>
+  );
+}

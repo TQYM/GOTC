@@ -33,8 +33,16 @@ CATALOG: dict[TileType, TileSpec] = {
         TileSpec(TileType.GREEN_PLAZA, "城市广场", "绿地", (2, 2), 500_000, 15_000),
         TileSpec(TileType.EDU_SCHOOL, "学校", "公共服务", (2, 2), 1_200_000, 80_000),
         TileSpec(TileType.MED_CLINIC, "医院", "公共服务", (2, 2), 2_000_000, 120_000),
+        TileSpec(TileType.SRV_POLICE, "警察局", "市政服务", (2, 2), 800_000, 60_000),
+        TileSpec(TileType.SRV_FIRE, "消防局", "市政服务", (2, 2), 900_000, 70_000),
+        TileSpec(TileType.SRV_GARBAGE, "垃圾处理厂", "市政服务", (2, 2), 700_000, 55_000),
+        TileSpec(TileType.SRV_SEWAGE, "污水处理厂", "市政服务", (2, 2), 1_000_000, 65_000),
+        TileSpec(TileType.SRV_POWER, "发电厂", "市政服务", (2, 2), 1_600_000, 110_000),
+        TileSpec(TileType.SRV_WATER, "自来水厂", "市政服务", (2, 2), 1_200_000, 90_000),
         TileSpec(TileType.TRANS_METRO, "地铁站", "交通", (1, 1), 3_000_000, 200_000),
         TileSpec(TileType.TRANS_ROAD, "城市道路", "交通", (1, 1), 60_000, 2_000),
+        TileSpec(TileType.TRANS_AVENUE, "城市大道", "交通", (1, 1), 120_000, 4_000),
+        TileSpec(TileType.TRANS_HIGHWAY, "城市高速", "交通", (1, 1), 240_000, 8_000),
         # util_bridge 为 1×N（N=跨河最短连续格数，01 §3），锚点展开在 PR-07 特判，桩按 1×1
         TileSpec(TileType.UTIL_BRIDGE, "跨河桥", "市政", (1, 1), 200_000, 10_000),
     ]
