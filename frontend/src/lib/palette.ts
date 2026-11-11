@@ -43,7 +43,7 @@ export const TERRAIN_COLORS: Record<Terrain, string> = {
   river: "#46B4F2",
   bank: "#9EE3FF",
   forest: "#77C25A",
-  road_inherited: "#6B6F8E",
+  road_inherited: "#A7ABC6",
   occupied: "#F3E2B3",
 };
 
@@ -54,7 +54,7 @@ export const TERRAIN_ALT_COLORS: Record<Terrain, string> = {
   river: "#40ACEB",
   bank: "#94DCFA",
   forest: "#70BA54",
-  road_inherited: "#6B6F8E",
+  road_inherited: "#A7ABC6",
   occupied: "#EEDBA8",
 };
 
