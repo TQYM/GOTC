@@ -656,7 +656,7 @@ export default function CityScene3D({
           )}
           <TileLayer parcel={parcel} tiles={tiles} />
           <ServiceRings parcel={parcel} tiles={tiles} />
-          <CitizenDots parcel={parcel} tiles={tiles} population={citizenPopulation} />
+          <CitizenDots parcel={parcel} tiles={tiles} population={citizenPopulation} existingCells={existingCells} />
         <TransitLines parcel={parcel} tiles={tiles} transit={transit} />
           {showBuildable ? (
             <BuildableLayer

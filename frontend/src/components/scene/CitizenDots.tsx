@@ -75,23 +75,45 @@ export function CitizenDots({
   parcel,
   tiles,
   population,
+  existingCells,
 }: {
   parcel: Parcel;
   tiles: Tile[];
   population: number;
+  /** 真实片区既有建筑占用的格子（"r,c"）。玩家还没建住宅时，人从这里出发。 */
+  existingCells?: Set<string>;
 }) {
   const grid = useMemo(() => gridOf(parcel), [parcel]);
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
   const agents = useMemo<Agent[]>(() => {
-    const homes = tiles.filter((tile) => tile.type.startsWith("res_"));
+    const playerHomes = tiles.filter((tile) => tile.type.startsWith("res_"));
+    // 真实片区开局时玩家一栋住宅都没有，但城里住着几百万人。
+    // 这时用既有建筑的占用格当出发点，否则整个画面一个人都不会出现。
+    const existAnchors: [number, number][] = [];
+    if (playerHomes.length === 0 && existingCells) {
+      for (const key of existingCells) {
+        const [r, c] = key.split(",").map(Number);
+        if (Number.isFinite(r) && Number.isFinite(c)) existAnchors.push([r, c]);
+        if (existAnchors.length >= 240) break;
+      }
+    }
+    const homes: { id: string; anchor: [number, number] }[] =
+      playerHomes.length > 0
+        ? playerHomes.map((tile) => ({ id: tile.id, anchor: tile.anchor as [number, number] }))
+        : existAnchors.map((anchor, index) => ({ id: `exist-${anchor[0]}-${anchor[1]}-${index}`, anchor }));
     if (homes.length === 0 || population <= 0) return [];
+
     const jobs = tiles.filter((tile) =>
       JOB_PREFIXES.some((prefix) => tile.type.startsWith(prefix)),
     );
-    // 目的地优先取岗位；纯住宅区则去另一栋住宅，保证总有人在路上
-    const destinations = jobs.length > 0 ? jobs : homes;
+    // 目的地优先取岗位；纯住宅区则去另一栋住宅，保证总有人在路上。
+    // 既有片区没有岗位数据时，就在既有格里来回走 —— 通勤的样子要有。
+    const destinations =
+      jobs.length > 0
+        ? jobs.map((tile) => ({ id: tile.id, anchor: tile.anchor as [number, number] }))
+        : homes;
 
     const count = Math.max(
       MIN_AGENTS,
@@ -101,7 +123,12 @@ export function CitizenDots({
     for (let i = 0; i < count; i += 1) {
       const home = homes[i % homes.length];
       const seed = hash(`${home.id}:${i}`);
-      const dest = destinations[seed % destinations.length];
+      // 既有人口没有岗位信息时，随机挑一个**不同的**既有格当目的地，
+      // 否则 dest === home，人原地不动。
+      let dest = destinations[seed % destinations.length];
+      if (dest.id === home.id && destinations.length > 1) {
+        dest = destinations[(seed + 7) % destinations.length];
+      }
       const [hx, hz] = cellToWorld(grid, home.anchor[0], home.anchor[1]);
       const [dx, dz] = cellToWorld(grid, dest.anchor[0], dest.anchor[1]);
       // 同一格上的人错开一点，避免叠成一个点
