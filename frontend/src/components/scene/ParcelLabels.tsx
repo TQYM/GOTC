@@ -63,7 +63,7 @@ export default function ParcelLabels({
           (l.importance ?? 3) >= 3,
       )
       .sort((a, b) => (b.importance ?? 3) - (a.importance ?? 3))
-      .slice(0, 900);
+      .slice(0, 240);
     return picked
       .map((l) => ({
         name: l.name as string,

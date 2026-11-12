@@ -364,6 +364,12 @@ export function heightExaggeration(worldSize: number): number {
   return Math.max(1, worldSize / 5200);
 }
 
+/** 原型：低层按倍率放大保证看得见，20m 以上部分只放大 35%，避免远景变成一片「针林」 */
+export function compressHeight(h: number, scale: number): number {
+  if (scale <= 1) return h;
+  return h <= 20 ? h * scale : 20 * scale + (h - 20) * scale * 0.35;
+}
+
 /** Keep chunk identity so expensive extrusion can be deferred until a chunk is visible. */
 export function createExistingAssetChunks(
   file: BuildingsFile,
@@ -384,7 +390,7 @@ export function createExistingAssetChunks(
     let maxHeight = 0;
 
     for (const asset of assets) {
-      maxHeight = Math.max(maxHeight, existingAssetHeight(asset) * heightExaggeration(worldSize));
+      maxHeight = Math.max(maxHeight, compressHeight(existingAssetHeight(asset), heightExaggeration(worldSize)));
       for (const footprintPoint of footprintPoints(asset)) {
         point.set(footprintPoint.x - half, baseY, half - footprintPoint.y);
         bounds.expandByPoint(point);
@@ -435,7 +441,7 @@ export function createExistingBuildingGeometries(
         if (asset.category !== category) continue;
         const points = footprintPoints(asset);
         if (points.length < 3) continue;
-        const h = existingAssetHeight(asset) * heightScale;
+        const h = compressHeight(existingAssetHeight(asset), heightScale);
         if (lowPoly) {
           let minX = Infinity;
           let maxX = -Infinity;

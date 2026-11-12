@@ -178,3 +178,68 @@ PR-40 与 PR-41 互不依赖，可并行。
 | 低分辨率渲染让地名标签难读 | 标签已改像素字体按整数倍绘制；仍不清晰时标签改为 HTML 覆盖层（不进低分辨率画布） |
 | 草绿地面让「绿地」分类不够醒目 | 绿地 `mint` 比草地更亮更青，且玩家建筑有墨色描边；不够时地面降饱和到 `#B5E08F` |
 | 素材授权 | 只用 OFL（字体）与 MIT（图标）素材，`LICENSE` 来源声明同步追加 |
+
+## 8. 二期：经营 UI 像素化与地图读图（基于 main@afd183e，2026-11-11）
+
+> 背景：PR-39～42 的像素风已在 `8c85c55` 并入 main（落地页、资源栏、城市徽章、快捷栏、时间按钮组、建造背包、详情卡、场景色板）。之后 `d92ecf7` 关闭了地图像素化，`0ebed08` 换成 48km 东西朝海棋盘，`6900e51` 按 C:S 加了一整套经营 UI。本节只处理这三件事带来的新落差。
+> 边界不变：只动表现层；C:S 的 UI **结构**（13-cs-rebuild-log 的面板、速度档、需求条）保留，只换皮；不重新打开整图像素化（`PIXEL_ART_ENABLED=false` 视为产品决定）。
+
+### 8.1 现状诊断
+
+| 级别 | 问题 | 证据 |
+|---|---|---|
+| 高 | **第四套视觉语言**：C:S 经营 UI 用深色半透明 + 圆角 + 毛玻璃 + Tailwind 的 emerald / rose / slate，和旁边的像素组件并排出现 | `SpeedControl` `DemandPanel` `SideDock` 及其 6 个面板（财政/市民/行政区/线路/统计/政策）、`MilestoneBar` `WeatherBadge` `TutorialOverlay` `TileActions` `scene/map/MapHud` `scene/map/BuildingPanel`：共 15 个组件，`px-*` 类 0 处，`rounded*` 46 处、`backdrop-blur` 15 处 |
+| 高 | **48km 棋盘读不出城市**：2 万栋既有建筑同一种奶油墙 + 浅色顶，高度统一放大 9.2 倍（`worldSize/5200`），远景是一片细高的「针林」；地名 DOM 层最多 900 条 | `lib/scene.ts heightExaggeration`、`RealCityLayers paintFaces`、`ParcelLabels slice(0, 900)` |
+| 高 | **全域底图没有接色板**：`fullmap.worker.ts` 自带一套地形色（`#EBE7D8` 地面、`#F6D68C` 快速路）和标签色，与 `PX` 无关。CBD 存档时沙盘外圈正是这张图，沙盘内外两套配色 | `src/lib/map/fullmap.worker.ts:56,79-88`、`scene/map/labelOverlay.ts:10-12` |
+| 中 | 侧栏图标用汉字（¥ 人 区 车 / 图 法）；速度档、天气、引导里还有 emoji | `SideDock.TABS`、`SpeedControl`、`WeatherBadge`、`TutorialOverlay` |
+| 中 | 右侧一列挤了三组控件：`SideDock` 右侧按钮（top-36）、时间/工具按钮组、信息视图竖条，加上错误提示也落在这里，互相压 | 1440×900 截图 |
+| 中 | 字体：站酷庆科黄油体不是像素字体，和 Pixelify Sans 不同语言；Pixelify 的「5」和「S」几乎一样，资金 500 万读成「S00 万」；资源栏标签约 9px | `globals.css --font-sans` |
+| 中 | 新手引导整屏压暗加模糊，看不到要点击的按钮 | `TutorialOverlay` |
+| 低 | 需求条 R/C/I 用 emerald / sky / amber，和建造卡的住宅黄、商业橙、工业紫对不上 | `DemandPanel` |
+| 低 | 道路格 `#6B6F8E` 在 400m 一格的大棋盘上成片出现，远景被深色块切碎 | `TERRAIN_COLORS.road_inherited` |
+
+### 8.2 地图：读图优先（不开像素化也能和 UI 一个味道）
+
+| 项 | 做法 | 状态 |
+|---|---|---|
+| 街区主题屋顶 | civic / residential 屋顶按世界坐标分块（块边长 = 棋盘边长 / 24，48km 下约 2km）取 6 种屋顶色之一（`orange/blue/sun/grape/mint/berry` 的 light 版），墙保持奶油。整城读出片区肌理，与 C:S 行政区概念对得上；有行政区数据后改按行政区着色 | 原型 `feat/pixel-ui-phase2` |
+| 高度压缩 | `compressHeight(h, k)`：20m 以下按 k 倍，超出部分只放大 0.35k。低层仍看得见，高层不再变针 | 原型 |
+| 道路格提亮 | `road_inherited` 由 `#6B6F8E` 改 `#A7ABC6`（= 路缘色）；真实路网条带保留深色，形成「浅地 + 深线」 | 原型 |
+| 地名上限 | 48km 地名上限 900 → 240；后续按缩放分三档：远景只显示区名（`sun` 底大号牌）+ 前 20 个地标，中景加街道，近景全开 | 上限已原型，分档待做 |
+| 全域底图换色 | `fullmap.worker.ts` 改为从 `palette.ts` 取色；棋盘外的全域地图用 PX 的**褪色版**（饱和度 −35%、明度 +8%），让棋盘是舞台、外圈是背景 | 待做 |
+| 墨色描边 | 只给玩家建筑和 importance≥4 的地标加 `EdgesGeometry` 墨线（每类 1 个 `LineSegments`），一眼区分「我建的 / 地标 / 普通楼」 | 待做 |
+| 落地弹跳 | 新建筑 `steps(4)` 由 0.6→1.08→1 缩放 + 4 个像素尘土方块，配合已有的镜头飞近 | 待做 |
+| 近景像素化（可选） | 相机距离 < 1.5km 时才启用 `PixelPass` 2×，远景保持平滑；设置里默认关 | 待产品确认 |
+
+### 8.3 经营 UI：只换皮，不改 C:S 结构
+
+- **新增 4 个基础件**（`components/ui/`）：`PxWindow`（标题条 + 像素图标 + 关闭，取代 `bg-slate-900/85 rounded-lg backdrop-blur`）、`PxStatRow`（标签 / 数值行，涨绿跌红用 `ok/bad`）、`PxSlider`（分段滑块，用于税率与预算，12 格一档）、`PxBar`（分段条，用于需求、里程碑、日进度）。
+- **SideDock**：汉字图标换 `pixelArt.ts` 新增的 6 个 12×12 图标（金币袋、小人、旗帜、公交、柱状图、卷轴），按钮用 `px-btn` 小号；左右两列合并到左侧一列，挪到城市徽章下方。
+- **SpeedControl**：并入顶部资源栏下沿，做成「磁带机」四键（暂停 / 1× / 2× / 3×），当前档 `sun` 底；日进度用 `PxBar` 24 格。
+- **DemandPanel**：R/C/I 改用 `sun / orange / grape`，缩成资源栏右端的 3 根竖条，释放左下角。
+- **右侧一列**：时间/工具按钮组与信息视图竖条合并成一个「工具架」；提示条统一挪到资源栏正下方居中。
+- **TutorialOverlay**：去掉全屏模糊；用规划导师头像 + 像素对话气泡指向目标控件，目标控件外围加 4px `sun` 闪框（`steps(2)`）。
+- **MapHud / BuildingPanel / TileActions**：改用 `PxWindow`，与 `TileSheet` 详情卡同一结构。
+
+### 8.4 字体
+
+- 中文 UI 小字（≤16px）：**缝合像素字体 Fusion Pixel 12px 简体比例版**（OFL-1.1，`@fontsource/fusion-pixel-12px-proportional-sc`，31,345 字形，完整 woff2 约 600KB），只用 12 / 24px。
+- 站酷庆科黄油体只留给 ≥24px 的标题（落地页大标题、弹窗标题）。
+- 数字：资源栏、价格、年份改用 Fusion Pixel 自带的拉丁数字（「5」与「S」可区分），保留 `tabular-nums`。
+- AI 长段落（新闻、导师点评、报告正文）继续系统无衬线 14–15px。
+
+### 8.5 任务卡（追加，编号接 PR-42）
+
+| PR | 标题 | 内容 | 前置 | 估时 |
+|---|---|---|---|---|
+| 43 | 地图读图优化 | §8.2 前四项（原型转正 + 单测：`compressHeight`、屋顶分块确定性）+ 地名三档 | — | 3h |
+| 44 | 全域底图接色板 | §8.2「全域底图换色」：worker 从 palette 取色、褪色版、`labelOverlay` 换 PX | 43 | 3h |
+| 45 | 经营 UI 像素化 | §8.3 全部：4 个基础件 + 15 个组件换皮 + 布局归并；testid / aria 不变 | — | 5h |
+| 46 | 字体与手感 | §8.4 字体替换；§8.2 描边、落地弹跳；可选近景像素化 | 45 | 3h |
+
+PR-43/44 与 PR-45 可并行。DoD 沿用 §6，另加：
+
+- [ ] 1440×900 与 375px 宽各一张截图，覆盖 48km 棋盘与 CBD 两种存档。
+- [ ] 48km 棋盘默认机位：同屏可读地名 ≤ 60 个；楼体最高处不超过屏高 1/3。
+- [ ] 经营面板中不再出现 `rounded-*`、`backdrop-blur`、Tailwind 色名（`emerald-*` 等），颜色只取 `--px-*`。
+- [ ] 现有 3 个 lint error（`TutorialOverlay.tsx:29`、`CitizenDots.tsx:154/170`，main 上已存在）在 PR-45 / PR-46 中顺手修掉。

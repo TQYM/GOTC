@@ -88,15 +88,27 @@ const PIXEL_FONT = '"Pixelify Sans", "ZCOOL QingKe HuangYou", sans-serif';
  * 既有建筑按面法线写顶点色（16 §3.4 / §5.1）：朝上的面写屋顶色，其余写墙色；
  * 在 chunk 几何创建时做一次，随 chunk 缓存，合批后仍保留。
  */
-function paintFaces(geometry: THREE.BufferGeometry, category: keyof typeof EXISTING_FACES) {
+// 原型：街区主题屋顶（同一街区共用一种屋顶色），让 2 万栋奶油色楼读出城市肌理
+const DISTRICT_ROOFS = ["#FF9E6B", "#7CCBFF", "#FFC93C", "#C4B2FF", "#8EF0BF", "#FF9AAE"].map((c) => new THREE.Color(c));
+
+function paintFaces(geometry: THREE.BufferGeometry, category: keyof typeof EXISTING_FACES, block: number) {
   const faces = EXISTING_FACES[category];
   const wall = new THREE.Color(faces.m);
   const roof = new THREE.Color(faces.t);
+  const themed = category === "civic" || category === "residential";
   const normal = geometry.getAttribute("normal");
-  const n = geometry.getAttribute("position").count;
+  const position = geometry.getAttribute("position");
+  const n = position.count;
   const colors = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) {
-    const c = normal && normal.getY(i) > 0.5 ? roof : wall;
+    const up = normal && normal.getY(i) > 0.5;
+    let c = up ? roof : wall;
+    if (up && themed) {
+      const bx = Math.floor(position.getX(i) / block);
+      const bz = Math.floor(position.getZ(i) / block);
+      const h = Math.abs(Math.imul(bx * 73856093 ^ bz * 19349663, 2654435761)) >>> 0;
+      c = DISTRICT_ROOFS[h % DISTRICT_ROOFS.length];
+    }
     colors[i * 3] = c.r;
     colors[i * 3 + 1] = c.g;
     colors[i * 3 + 2] = c.b;
@@ -195,7 +207,7 @@ function ExistingBuildings({
       let cached = geometryCache.current.get(chunk.key);
       if (!cached) {
         cached = createExistingBuildingGeometries(chunk.assets, worldSize);
-        for (const layer of cached) paintFaces(layer.geometry, layer.category);
+        for (const layer of cached) paintFaces(layer.geometry, layer.category, worldSize / 24);
         geometryCache.current.set(chunk.key, cached);
       }
       layers.push(cached);
