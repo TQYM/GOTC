@@ -266,10 +266,9 @@ body {
   place-items: center;
   width: 2.25rem;
   height: 2.25rem;
-  background: var(--px-paper);
-  box-shadow:
-    0 0 0 3px var(--px-ink),
-    inset 0 -4px 0 var(--px-paper-4);
+  background-color: #fff8e7;
+  color: #2a2340;
+  border: 2px solid #2a2340;
 }
 .px-icon-btn:active {
   transform: translateY(2px);

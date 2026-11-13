@@ -32,7 +32,7 @@ import { occupiedSet, tileAt, useGame } from "@/store/game";
 import { TILE_SPECS } from "@/lib/catalog";
 import { rememberRecent } from "@saves/lib/recent";
 import { ResourcePills } from "./MetricsPanel";
-import PhaseBanner from "./PhaseBanner";
+import { ActionMenu } from "./ActionMenu";
 import DemandPanel from "./DemandPanel";
 import SpeedControl from "./SpeedControl";
 import { WeatherBadge } from "./WeatherBadge";
@@ -42,7 +42,7 @@ import { TileActions } from "./TileActions";
 
 
 import { MilestoneBar } from "./MilestoneBar";
-import { InfoViewBar } from "./InfoViewBar";
+
 import ReportSummary from "./ReportSummary";
 import RemoveConfirm from "./RemoveConfirm";
 import Toasts from "./Toasts";
@@ -419,6 +419,7 @@ export default function GameView({
 
         {/* HUD 层：不拦截场景操作，只有具体控件接收事件 */}
         <div className="pointer-events-none absolute inset-0 z-10">
+          <ActionMenu />
 
           <div className="absolute left-4 top-4">
             <TopBar title={selectedLabel?.name ?? regionName ?? null} />
@@ -436,7 +437,6 @@ export default function GameView({
         </div>
           </div>
 
-          <PhaseBanner />
 
           {/* PR-36：全域地图数据状态 / 视角预设控制（右上，避开 InspectorPanel） */}
           <div className="pointer-events-none absolute bottom-28 right-3 z-10 sm:bottom-auto sm:top-36">
@@ -469,10 +469,6 @@ export default function GameView({
           </div>
 
           <SideDock />
-
-          <div className="absolute bottom-[13.5rem] right-4">
-            <InfoViewBar />
-          </div>
 
         <MilestoneBar />
 

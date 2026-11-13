@@ -69,7 +69,7 @@ function RoundAction({
   );
 }
 
-export default function PhaseBanner() {
+export default function PhaseBanner({ inline = false }: { inline?: boolean } = {}) {
   const api = useGame((s) => s.api);
   const phase = useGame((s) => s.phase);
   const busy = useGame((s) => s.busy);
@@ -116,7 +116,11 @@ export default function PhaseBanner() {
   return (
     <>
       <div
-        className="pointer-events-none absolute right-4 top-[15rem] z-20 flex max-w-[min(26rem,50vw)] flex-col-reverse items-end gap-3"
+        className={
+          inline
+            ? "flex flex-col items-end gap-3"
+            : "pointer-events-none absolute right-4 top-[15rem] z-20 flex max-w-[min(26rem,50vw)] flex-col-reverse items-end gap-3"
+        }
         data-testid="phase-banner"
       >
         <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1.5">

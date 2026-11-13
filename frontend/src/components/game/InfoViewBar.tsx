@@ -19,12 +19,12 @@ const VIEWS: { key: InfoViewType; label: string; icon: string }[] = [
   { key: "jobs", label: "就业", icon: "⚒" },
 ];
 
-export function InfoViewBar() {
+export function InfoViewBar({ vertical = true }: { vertical?: boolean } = {}) {
   const infoView = useGame((s) => s.infoView);
   const setInfoView = useGame((s) => s.setInfoView);
 
   return (
-    <div className="pointer-events-auto flex flex-col gap-1" role="group" aria-label="信息视图">
+    <div className={vertical ? "pointer-events-auto grid grid-cols-3 gap-1" : "pointer-events-auto flex flex-col gap-1"} role="group" aria-label="信息视图">
       {VIEWS.map((v) => (
         <button
           key={v.key}
@@ -33,8 +33,8 @@ export function InfoViewBar() {
           data-testid={`info-view-${v.key}`}
           onClick={() => setInfoView(v.key)}
           title={v.label}
-          className="px-tab flex h-9 w-9 items-center justify-center text-base"
-          style={{ opacity: infoView === v.key ? 1 : 0.55 }}
+          className="px-tab flex h-9 w-9 items-center justify-center text-base font-bold"
+          style={{ opacity: infoView === v.key ? 1 : 0.55, color: "#2A2340" }}
         >
           {v.icon}
         </button>
