@@ -85,7 +85,7 @@ function Item({ item }: { item: FeedItem }) {
           <div className="px-bubble min-w-0 flex-1 px-3 py-1.5">
             <div className="flex items-center gap-1.5 text-[11px] text-fg-muted">
               {item.data.persona}
-              <span className="px-chip px-1 text-[10px] text-white" style={{ background: s.chip }}>
+              <span className="px-chip px-1 text-[10px] text-px-ink" style={{ background: s.chip }}>
                 {s.label}
               </span>
               <AiBadge source={item.data.source} />
@@ -221,7 +221,7 @@ export default function InfoFeed() {
 
       {conn === "down" && (
         <div
-          className="bg-[var(--px-bad)] px-3 py-1.5 text-xs text-white"
+          className="bg-[var(--px-bad)] px-3 py-1.5 text-xs text-px-ink"
           role="status"
           data-testid="conn-banner"
         >

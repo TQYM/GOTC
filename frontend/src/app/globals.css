@@ -53,6 +53,24 @@
   --color-fg: var(--fg);
   --color-fg-muted: var(--fg-muted);
   --color-accent: var(--accent);
+  --color-px-ink: var(--px-ink);
+  --color-px-ink-soft: var(--px-ink-soft);
+  --color-px-paper: var(--px-paper);
+  --color-px-paper-2: var(--px-paper-2);
+  --color-px-paper-4: var(--px-paper-4);
+  --color-px-paper-shade: var(--px-paper-shade);
+  --color-px-sky: var(--px-sky);
+  --color-px-ok: var(--px-ok);
+  --color-px-bad: var(--px-bad);
+  --color-px-warn: var(--px-warn);
+  --color-px-sun: var(--px-sun);
+  --color-px-sun-light: var(--px-sun-light);
+  --color-px-orange: var(--px-orange);
+  --color-px-grape: var(--px-grape);
+  --color-px-mint: var(--px-mint);
+  --color-px-berry: var(--px-berry);
+  --color-px-blue: var(--px-blue);
+  --color-px-slate: var(--px-slate);
   --font-sans: "Pixelify Sans", "ZCOOL QingKe HuangYou", "PingFang SC", "Microsoft YaHei",
     "Noto Sans CJK SC", system-ui, sans-serif;
   --font-mono: "Pixelify Sans", ui-monospace, monospace;

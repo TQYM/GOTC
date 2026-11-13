@@ -39,7 +39,7 @@ export default function ReportSummary() {
           {rep.cityName ?? "城市诊断"}
         </h2>
         <span
-          className="px-chip bg-[var(--px-grape)] text-white"
+          className="px-chip bg-[var(--px-grape)] text-px-ink"
           data-testid="ending-label"
         >
           {ENDING_LABEL[rep.ending]}

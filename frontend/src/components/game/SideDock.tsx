@@ -1,92 +1,9 @@
-"use client";
-
-/**
- * 左侧图标坞 + 单面板（对齐 C:S 左下角那排按钮的交互）。
- *
- * 之前每个面板各自 `absolute top-[Nrem]`，展开几个就叠在一起。
- * 改成「一排图标，点开谁只显示谁」，同一时间最多一个面板，
- * 高度不够时面板自己滚动，不再互相压。
- */
-
-import { useState } from "react";
+"use client"; /** * 左侧图标坞 + 单面板（对齐 C:S 左下角那排按钮的交互）。 * * 之前每个面板各自 `absolute top-[Nrem]`，展开几个就叠在一起。 * 改成「一排图标，点开谁只显示谁」，同一时间最多一个面板， * 高度不够时面板自己滚动，不再互相压。 */ import { useState } from "react";
 import { BudgetPanel } from "./BudgetPanel";
 import { CitizenPanel } from "./CitizenPanel";
 import { DistrictPanel } from "./DistrictPanel";
 import { TransitPanel } from "./TransitPanel";
 import { PolicyPanel } from "./PolicyPanel";
-import { StatisticsPanel } from "./StatisticsPanel";
-
-const TABS = [
-  { key: "budget", label: "财政", icon: "¥", side: "left" },
-  { key: "citizen", label: "市民", icon: "人", side: "left" },
-  { key: "district", label: "行政区", icon: "区", side: "left" },
-  { key: "transit", label: "线路", icon: "车", side: "left" },
-  { key: "stats", label: "统计", icon: "图", side: "right" },
-  { key: "policy", label: "政策", icon: "法", side: "right" },
-] as const;
-
-type TabKey = (typeof TABS)[number]["key"];
-
-export function SideDock() {
-  const [open, setOpen] = useState<TabKey | null>(null);
-  const left = TABS.filter((tab) => tab.side === "left");
-  const right = TABS.filter((tab) => tab.side === "right");
-  const openTab = TABS.find((tab) => tab.key === open);
-
-  return (
-    <>
-      <div className="pointer-events-auto absolute left-4 top-36 z-30 flex flex-col gap-1">
-        {left.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            title={tab.label}
-            aria-pressed={open === tab.key}
-            onClick={() => setOpen((value) => (value === tab.key ? null : tab.key))}
-            className={`flex h-9 w-9 items-center justify-center rounded-md border text-sm backdrop-blur transition-colors ${
-              open === tab.key
-                ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-200"
-                : "border-white/10 bg-black/50 text-white/65 hover:text-white"
-            }`}
-          >
-            {tab.icon}
-          </button>
-        ))}
-      </div>
-
-      <div className="pointer-events-auto absolute right-4 top-36 z-30 flex flex-col gap-1">
-        {right.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            title={tab.label}
-            aria-pressed={open === tab.key}
-            onClick={() => setOpen((value) => (value === tab.key ? null : tab.key))}
-            className={`flex h-9 w-9 items-center justify-center rounded-md border text-sm backdrop-blur transition-colors ${
-              open === tab.key
-                ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-200"
-                : "border-white/10 bg-black/50 text-white/65 hover:text-white"
-            }`}
-          >
-            {tab.icon}
-          </button>
-        ))}
-      </div>
-
-      {open && openTab && (
-        <div
-          className={`pointer-events-none absolute top-36 z-20 max-h-[calc(100%-12rem)] overflow-y-auto pb-2 ${
-            openTab.side === "left" ? "left-16" : "right-16"
-          }`}
-        >
-          {open === "budget" && <BudgetPanel />}
-          {open === "citizen" && <CitizenPanel />}
-          {open === "district" && <DistrictPanel />}
-          {open === "transit" && <TransitPanel />}
-          {open === "stats" && <StatisticsPanel />}
-          {open === "policy" && <PolicyPanel />}
-        </div>
-      )}
-    </>
-  );
+import { StatisticsPanel } from "./StatisticsPanel"; const TABS = [ { key: "budget", label: "财政", icon: "¥", side: "left" }, { key: "citizen", label: "市民", icon: "人", side: "left" }, { key: "district", label: "行政区", icon: "区", side: "left" }, { key: "transit", label: "线路", icon: "车", side: "left" }, { key: "stats", label: "统计", icon: "图", side: "right" }, { key: "policy", label: "政策", icon: "法", side: "right" },
+] as const; type TabKey = (typeof TABS)[number]["key"]; export function SideDock() { const [open, setOpen] = useState<TabKey | null>(null); const left = TABS.filter((tab) => tab.side === "left"); const right = TABS.filter((tab) => tab.side === "right"); const openTab = TABS.find((tab) => tab.key === open); return ( <> <div className="pointer-events-auto absolute left-4 top-[13.5rem] z-30 flex flex-col gap-1.5"> {left.map((tab) => ( <button key={tab.key} type="button"title={tab.label} aria-pressed={open === tab.key} onClick={() => setOpen((value) => (value === tab.key ? null : tab.key))} className="px-icon-btn" data-active={open === tab.key} > {tab.icon} </button> ))} </div> <div className="pointer-events-auto absolute right-4 top-[13.5rem] z-30 flex flex-col gap-1.5"> {right.map((tab) => ( <button key={tab.key} type="button"title={tab.label} aria-pressed={open === tab.key} onClick={() => setOpen((value) => (value === tab.key ? null : tab.key))} className="px-icon-btn" data-active={open === tab.key} > {tab.icon} </button> ))} </div> {open && openTab && ( <div className={`pointer-events-none absolute top-[13.5rem] z-20 max-h-[calc(100%-12rem)] overflow-y-auto pb-2 ${ openTab.side === "left" ? "left-16" : "right-16"}`} > {open === "budget" && <BudgetPanel />} {open === "citizen" && <CitizenPanel />} {open === "district" && <DistrictPanel />} {open === "transit" && <TransitPanel />} {open === "stats" && <StatisticsPanel />} {open === "policy" && <PolicyPanel />} </div> )} </> );
 }

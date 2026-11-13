@@ -122,7 +122,7 @@ export default function PhaseBanner() {
         <div className="pointer-events-auto flex flex-wrap items-center justify-end gap-1.5">
           <span
             data-testid="phase-label"
-            className="px-chip text-white"
+            className="px-chip text-px-ink"
             style={{ background: PHASE_TONE[phase] }}
           >
             {PHASE_LABEL[phase]}

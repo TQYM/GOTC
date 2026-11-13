@@ -511,7 +511,7 @@ export default function GameView({
 
           {tool.kind === "place" && check && !check.ok && (
             <div
-              className="pointer-events-none absolute left-1/2 top-[8.5rem] z-20 -translate-x-1/2 bg-[var(--px-bad)] px-4 py-2 text-[15px] text-white px-tip"
+              className="pointer-events-none absolute left-1/2 top-[8.5rem] z-20 -translate-x-1/2 bg-[var(--px-bad)] px-4 py-2 text-[15px] text-px-ink px-tip"
               data-testid="invalid-reason"
             >
               {check.reason}
