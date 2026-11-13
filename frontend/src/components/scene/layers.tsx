@@ -55,6 +55,9 @@ export function TerrainLayer({
         transparent: true,
         opacity: 0.78,
         depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
       }),
     [],
   );
@@ -104,7 +107,14 @@ export function TerrainLayer({
         }}
       />
       {geo.water && (
-        <mesh geometry={geo.water} material={waterMat} renderOrder={1} />
+        // 抬 4cm + polygonOffset：否则与地形顶面共面，深度测试在浮点误差下
+        // 逐帧翻转，河道会整片闪烁。
+        <mesh
+          geometry={geo.water}
+          material={waterMat}
+          position={[0, 0.04, 0]}
+          renderOrder={1}
+        />
       )}
       <lineSegments geometry={geo.grid} material={gridMat} />
     </group>
@@ -267,14 +277,19 @@ function TileTypeMesh({
   useLayoutEffect(() => {
     const mesh = ref.current;
     if (!mesh) return;
+    // 拆房后 tiles 变少：InstancedMesh 的 count 是构造时定的，
+    // 不显式改回来就会继续渲染旧的实例矩阵（拆掉的楼留在原地）。
+    mesh.count = tiles.length;
     tiles.forEach((tile, i) => setTileMatrix(mesh, i, parcel, tile));
     mesh.instanceMatrix.needsUpdate = true;
     mesh.computeBoundingSphere();
   }, [tiles, parcel]);
+  // key 绑定数量：tiles 增减时重建实例缓冲，避免复用旧容量
   return (
     <instancedMesh
+      key={tiles.length}
       ref={ref}
-      args={[geometry, material, tiles.length]}
+      args={[geometry, material, Math.max(1, tiles.length)]}
       castShadow
       receiveShadow
     />
@@ -606,6 +621,9 @@ export function BuildableLayer({
         transparent: true,
         opacity: 0.42,
         depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
       }),
     [],
   );
