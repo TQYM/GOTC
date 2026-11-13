@@ -25,9 +25,10 @@ namespace Gotc.Core
         public const int Size = 48;
         public const float CellSize = 2f;
 
-        public Cell[,] Cells { get; private set; } = new Cell[Size, Size];
+        /// <summary>地图种子：重新生成与存档都要用它（真实地块加载后会覆盖）。</summary>
+        [SerializeField] public int seed = 20261107;
 
-        [SerializeField] int seed = 20261113;
+        public Cell[,] Cells { get; private set; } = new Cell[Size, Size];
 
         /// <summary>格子内容变化时通知渲染层重烘 mesh。</summary>
         public event System.Action Changed;
@@ -56,6 +57,15 @@ namespace Gotc.Core
         }
 
         public bool InBounds(int r, int c) => r >= 0 && r < Size && c >= 0 && c < Size;
+
+        /// <summary>地图里是否存在河道格（灾难系统判断内涝用）。</summary>
+        public bool HasRiver()
+        {
+            for (int r = 0; r < Size; r++)
+            for (int c = 0; c < Size; c++)
+                if (Cells[r, c].terrain == Terrain.River) return true;
+            return false;
+        }
 
         public Vector3 CellToWorld(int r, int c) =>
             new Vector3((c - Size * 0.5f + 0.5f) * CellSize, 0f, (r - Size * 0.5f + 0.5f) * CellSize);

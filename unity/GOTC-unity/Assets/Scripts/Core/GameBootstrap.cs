@@ -41,6 +41,15 @@ namespace Gotc.Core
             camGo.transform.LookAt(Vector3.zero);
             camGo.AddComponent<RtsCamera>();
 
+            // UI：图标坞 + 存档热键
+            var dockGo = new GameObject("SideDock");
+            dockGo.transform.SetParent(root.transform);
+            var dock = dockGo.AddComponent<Gotc.UI.SideDock>();
+
+            var hotkeyGo = new GameObject("SaveHotkeys");
+            hotkeyGo.transform.SetParent(root.transform);
+            var hotkeys = hotkeyGo.AddComponent<Gotc.UI.SaveHotkeys>();
+
             var lightGo = new GameObject("Sun");
             lightGo.transform.SetParent(root.transform);
             var light = lightGo.AddComponent<Light>();
@@ -74,6 +83,12 @@ namespace Gotc.Core
 
             gridRenderer.sim = sim;
 
+            var buildGo = new GameObject("Buildings");
+            buildGo.transform.SetParent(root.transform);
+            var buildRenderer = buildGo.AddComponent<BuildingRenderer>();
+            buildRenderer.map = map;
+            buildRenderer.sim = sim;
+
             var infoGo = new GameObject("InfoView");
             infoGo.transform.SetParent(root.transform);
             var infoView = infoGo.AddComponent<InfoViewController>();
@@ -91,6 +106,24 @@ namespace Gotc.Core
             hud.clock = clock;
             hud.map = map;
             hud.sim = sim;
+
+
+
+            // UI
+            dock.sim = sim;
+            dock.clock = clock;
+            dock.map = map;
+            dock.districts = sim.districts;
+            dock.transit = sim.transit;
+
+            hotkeys.sim = sim;
+            hotkeys.map = map;
+            hotkeys.clock = clock;
+
+            // 真实片区（失败就退回 Perlin 生成）
+            ParcelLoader.Apply("beijing_cbd", map);
+            sim.citizens.SetSeed(map.seed);
+            sim.Recompute();   // 地块换过之后指标要立刻重算一次，否则暂停时永远是 0
         }
     }
 

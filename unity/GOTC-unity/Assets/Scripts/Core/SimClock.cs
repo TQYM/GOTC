@@ -22,7 +22,7 @@ namespace Gotc.Core
         static readonly int[] SpeedFrames = { 0, 1, 2, 4 };
 
         public uint Frame { get; private set; }
-        public int Speed { get; private set; } = 0;
+        public int Speed { get; private set; } = 1;   // 开局就跑，与 C:S 新城市默认速度一致
 
         public bool Paused => Speed == 0;
         public int Year => (int)(Frame / FramesPerYear) + 1;
@@ -31,6 +31,13 @@ namespace Gotc.Core
         public bool IsNight => Hour < 5f || Hour > 20f;
 
         public event Action<int> Stepped;   // 参数是 subStep
+
+        /// <summary>存档读回：直接跳到某一帧与某一速度档。</summary>
+        public void Restore(uint frame, int speed)
+        {
+            Frame = frame;
+            Speed = Mathf.Clamp(speed, 0, 3);
+        }
 
         public void SetSpeed(int speed)
         {
