@@ -70,7 +70,7 @@ function startBackend() {
   const py = process.platform === "win32" ? "python" : "python3";
   const backendDir = path.join(__dirname, "..", "backend");
   const args = ["-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", String(API_PORT), "--log-level", "warning"];
-  backend = spawn(py, args, { cwd: backendDir, env: { ...process.env, CITY20_DATABASE_PATH: path.join(app.getPath("userData"), "city20.db") }, stdio: ["ignore", "pipe", "pipe"] });
+  backend = spawn(py, args, { cwd: backendDir, env: { ...process.env, ...(process.env.CITY20_DATABASE_PATH ? { CITY20_DATABASE_PATH: process.env.CITY20_DATABASE_PATH } : {}) }, stdio: ["ignore", "pipe", "pipe"] });
   backend.stdout?.on("data", (b) => console.log("[backend]", b.toString().trim()));
   backend.stderr?.on("data", (b) => console.log("[backend:err]", b.toString().trim()));
   backend.on("exit", (code) => console.log("[backend] exit", code));
@@ -110,7 +110,8 @@ async function boot() {
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
   win.setMenuBarVisibility(false);
-  win.loadURL(`http://127.0.0.1:${WEB_PORT}/`);
+  const target = process.env.CITY20_URL || `http://127.0.0.1:${WEB_PORT}/`;
+  win.loadURL(target);
   win.webContents.on("did-fail-load", (_e, code, desc, url) => {
     console.error("[win] did-fail-load", code, desc, url);
   });
