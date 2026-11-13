@@ -89,6 +89,19 @@ namespace Gotc.Core
             buildRenderer.map = map;
             buildRenderer.sim = sim;
 
+            // 道路图层（贴在 y=0.03，避免和地块共面）
+            var roadGo = new GameObject("Roads");
+            roadGo.transform.SetParent(root.transform);
+            var roadRenderer = roadGo.AddComponent<RoadRenderer>();
+            roadRenderer.map = map;
+
+            // 市民点位
+            var agentsGo = new GameObject("CitizenAgents");
+            agentsGo.transform.SetParent(root.transform);
+            var agents = agentsGo.AddComponent<CitizenAgents>();
+            agents.map = map;
+            agents.sim = sim;
+
             var infoGo = new GameObject("InfoView");
             infoGo.transform.SetParent(root.transform);
             var infoView = infoGo.AddComponent<InfoViewController>();
@@ -119,6 +132,10 @@ namespace Gotc.Core
             hotkeys.sim = sim;
             hotkeys.map = map;
             hotkeys.clock = clock;
+
+            var shotGo = new GameObject("AutoScreenshot");
+            shotGo.transform.SetParent(root.transform);
+            shotGo.AddComponent<AutoScreenshot>();
 
             // 真实片区（失败就退回 Perlin 生成）
             ParcelLoader.Apply("beijing_cbd", map);
