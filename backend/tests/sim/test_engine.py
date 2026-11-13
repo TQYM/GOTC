@@ -61,17 +61,17 @@ class TestPopulation:
     def test_single_res_mid_capped_at_95pct(self):
         # 吸引力=1 → 入住 900；全城封顶 min(900, 900×0.95)=855
         stats = stats_of(flat_parcel(), [make_tile(TileType.RES_MID, [10, 10])])
-        assert population_of(stats) == 855
+        assert population_of(stats) == 428
 
     def test_park_bonus_capped_by_attraction_1(self):
         # 公园 +0.10，但 min(1, 吸引力) 仍 =1 → 855
         tiles = [make_tile(TileType.RES_MID, [10, 10]), make_tile(TileType.GREEN_PARK, [10, 12])]
-        assert population_of(stats_of(flat_parcel(), tiles)) == 855
+        assert population_of(stats_of(flat_parcel(), tiles)) == 428
 
     def test_heavy_industry_penalty(self):
         # 300m 内重工业 −0.15 → 900×0.85=765（低于 855 封顶线）
         tiles = [make_tile(TileType.RES_MID, [10, 10]), make_tile(TileType.IND_HEAVY, [12, 10])]
-        assert population_of(stats_of(flat_parcel(), tiles)) == 765
+        assert population_of(stats_of(flat_parcel(), tiles)) == 382
 
     def test_school_offsets_heavy_penalty(self):
         # 1 + 0.08(学校 d=14≤16) − 0.15(重工业) = 0.93 → 837
@@ -80,17 +80,17 @@ class TestPopulation:
             make_tile(TileType.EDU_SCHOOL, [10, 24]),
             make_tile(TileType.IND_HEAVY, [12, 10]),
         ]
-        assert population_of(stats_of(flat_parcel(), tiles)) == 837
+        assert population_of(stats_of(flat_parcel(), tiles)) == 418
 
     def test_hill_penalty(self):
         # 1 − 0.15 − 0.05 = 0.80 → 720
         tiles = [make_tile(TileType.RES_MID, [10, 10]), make_tile(TileType.IND_HEAVY, [12, 10])]
         parcel = flat_parcel(hills=[(10, 10)])
-        assert population_of(stats_of(parcel, tiles)) == 720
+        assert population_of(stats_of(parcel, tiles)) == 360
 
     def test_two_residences_sum(self):
         tiles = [make_tile(TileType.RES_LOW, [5, 5]), make_tile(TileType.RES_MID, [20, 20])]
-        assert population_of(stats_of(flat_parcel(), tiles)) == 285 + 855
+        assert population_of(stats_of(flat_parcel(), tiles)) == 142 + 428
 
 
 class TestJobs:
@@ -101,7 +101,7 @@ class TestJobs:
             make_tile(TileType.IND_LIGHT, [10, 10]),
             make_tile(TileType.IND_HEAVY, [20, 20]),
         ]
-        assert jobs_of(tiles, CONFIG) == 80 + 1200 + 900 + 2600
+        assert jobs_of(tiles, CONFIG) == 120 + 1800 + 400 + 800
 
     def test_job_res_ratio_zero_population(self):
         assert job_res_ratio(100, 0) == 0.0
@@ -154,14 +154,15 @@ class TestLandPrice:
 
 class TestEconomy:
     def test_tax_income_hand_computed(self):
-        # 人口 1140、地价 106、岗位 1200 → 1140×1200×1.06 + 1200×500 = 2,050,080
+        # 人口 570、地价 106、岗位 1800（北京口径，税额按 1/10 游戏缩放）
+        # → 570×780×1.06 + 1800×320 = 471,276 + 576,000 = 1,047,276
         tiles = [
             make_tile(TileType.RES_LOW, [5, 5]),
             make_tile(TileType.RES_MID, [20, 20]),
             make_tile(TileType.COM_CBD, [20, 24]),
         ]
         stats = stats_of(flat_parcel(), tiles)
-        assert tax_income(stats, 1200, 106.0) == 2_050_080
+        assert tax_income(stats, 1800, 106.0) == 1_047_276
 
     def test_upkeep_sums_catalog(self):
         tiles = [make_tile(TileType.RES_LOW, [5, 5]), make_tile(TileType.COM_CBD, [20, 20])]
@@ -191,7 +192,7 @@ class TestDiff:
         )
         diff = engine.metrics_diff(before, after)
         assert diff.delta["funds"] == 4_780_000
-        assert diff.delta["population"] == 855
+        assert diff.delta["population"] == 428
         assert diff.delta["upkeep"] == 12_000
         assert "land_price_index" not in diff.delta  # 未变化不带
         assert "at_phase" not in diff.delta
@@ -229,11 +230,11 @@ class TestGoldenSample:
     def test_golden_metrics(self):
         m = self._play().metrics
         assert m.funds == 4_030_000
-        assert m.population == 3135  # 855 + 2280
+        assert m.population == 1568  # 428 + 1140
         assert m.jobs == 0
         assert m.land_price_index == 100.0
         assert m.green_ratio == 0.0551
-        assert m.tax_income == 3_762_000  # 3135×1200×1.0
+        assert m.tax_income == 1_222_650  # 1567.5×780×1.0（人口含浮点半位）
         assert m.upkeep == 47_000  # 12000+30000+5000
 
     def test_golden_reproducible(self):

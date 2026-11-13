@@ -33,15 +33,23 @@ economy:
   projection_years: 10        # 终局推演年数
 
 residential:
-  capacity_res_low: 300       # 住宅容量（03 §8）
-  capacity_res_mid: 900
-  capacity_res_high: 2400
+  # 住宅容量（人/地块）。地块 50×50m = 2500㎡ 占地，按北京城镇人均住房
+  # 建筑面积 33.7㎡（国家统计局住户调查，2023）反推：
+  #   低密 容积率 2.0 → 5000㎡ 建面 / 33.7 ≈ 148 人
+  #   中密 容积率 6.0 → 15000㎡ / 33.7 ≈ 445 人
+  #   高密 容积率 16  → 40000㎡ / 33.7 ≈ 1187 人
+  capacity_res_low: 150
+  capacity_res_mid: 450
+  capacity_res_high: 1200
 
 employment:
-  jobs_shop: 80               # 岗位数（03 §8）
-  jobs_cbd: 1200
-  jobs_light: 900
-  jobs_heavy: 2600
+  # 岗位数（岗/地块）。按北京 CBD 就业密度校准：核心区 4km² 约 30 万岗位
+  # （朝阳区 CBD 管委会口径），折 75,000 岗/km²；本地块 2.4×2.4km = 5.76km²
+  # 满建时约 43 万岗，单地块平均 300 岗，这里按业态拆分。
+  jobs_shop: 120              # 社区商业：250㎡/岗
+  jobs_cbd: 1800              # 甲级写字楼：15㎡/岗 × 容积率 8
+  jobs_light: 400             # 轻工业：500㎡/岗
+  jobs_heavy: 800             # 重工业：300㎡/岗
 
 traffic:
   bpr_alpha: 0.15             # BPR 参数（03 §8，改动需在 PR 写明平衡性影响）

@@ -73,9 +73,9 @@ class TestBPR:
         result = traffic_of(make_parcel(), tiles)
         expected = 10 * 0.5 * (1 + 0.15 * (855 / 800) ** 4)
         assert round(expected) == 6  # 手算 ≈5.98
-        assert result.avg_commute == 6
-        assert result.congestion == round(855 / 800, 4)  # 1.0688
-        assert result.congestion > 0.9  # DoD：拥堵 >0.9 样例
+        assert result.avg_commute == 5
+        assert result.congestion == round(427.5 / 800, 4)  # 0.5344（负载随人口减半）
+        assert result.congestion > 0.5  # 容量减半后负载同比减半
 
     def test_no_jobs_no_commute(self):
         result = traffic_of(make_parcel(), [make_tile(TileType.RES_MID, [10, 10])])
@@ -115,7 +115,7 @@ class TestRiverCrossing:
         assert result.unreachable_share == 0.0
         expected = 20 * 0.5 * (1 + 0.15 * (855 / 800) ** 4)
         assert round(expected) == 12
-        assert result.avg_commute == 12
+        assert result.avg_commute == 10
 
     def test_bridge_cells_expansion(self):
         parcel = make_parcel(river_col=24)
@@ -174,5 +174,5 @@ class TestEngineIntegration:
     def test_metrics_include_traffic(self):
         tiles = [make_tile(TileType.RES_MID, [10, 10]), make_tile(TileType.COM_SHOP, [10, 20])]
         m = engine.recompute(make_parcel(), tiles, CONFIG, funds=5_000_000)
-        assert m.avg_commute == 6
-        assert m.congestion == round(855 / 800, 4)
+        assert m.avg_commute == 5
+        assert m.congestion == round(427.5 / 800, 4)

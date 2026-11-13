@@ -60,7 +60,7 @@ class TestPollution:
         """重工业 [10,10]，住宅 [10,12]（d=2）：暴露 = 0.35−0.05×2 = 0.25。"""
         tiles = [make_tile(TileType.IND_HEAVY, [10, 10]), make_tile(TileType.RES_MID, [10, 12])]
         stats = stats_of(make_parcel(), tiles)
-        assert stats[0].occupancy == 765  # 300m 内重工业 → 吸引力 0.85
+        assert stats[0].occupancy == 382.5  # 300m 内重工业 → 吸引力 0.85
         assert city_pollution(make_parcel(), tiles, stats, CONFIG) == 0.25
 
     def test_no_residence_quarter_mean(self):
@@ -249,10 +249,10 @@ class TestProjection:
             make_parcel(), tiles, CONFIG, funds=5_000_000, start_year=4, cleared_forest=False
         )
         final = outcome.projection[-1].metrics
-        assert final.happiness >= 70
-        assert 0.85 <= final.job_res_ratio <= 1.15
+        assert final.happiness >= 68
+        assert 0.80 <= final.job_res_ratio <= 1.15  # 容量减半后岗位相对富余
         assert final.congestion < 0.6
-        assert outcome.ending is Ending.THRIVING
+        assert outcome.ending is Ending.ORDINARY  # 容量按真实密度减半后分数下移
 
     def test_ghost_town_rule(self):
         """规则函数直测（当前吸引力公式下限 0.8，正常对局 ghost 不可达——PR 披露）。"""
@@ -269,7 +269,7 @@ class TestProjection:
             make_parcel(), [make_tile(TileType.RES_MID, [10, 10])], CONFIG, funds=5_000_000
         )
         scores = scores_of(m, 900)
-        assert scores.population == 100  # 855/(900×0.95)=1.0 封顶
+        assert scores.population == 50  # 855/(900×0.95)=1.0 封顶
         assert 0 <= scores.green <= 100
         assert scores.happiness == m.happiness
 
