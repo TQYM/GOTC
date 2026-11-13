@@ -160,7 +160,7 @@ export default function PhaseBanner({ inline = false }: { inline?: boolean } = {
           )}
         </div>
 
-        <div className="pointer-events-auto flex flex-wrap items-start justify-end gap-3">
+        <div className={inline ? "pointer-events-auto flex flex-col items-center gap-2" : "pointer-events-auto flex flex-wrap items-start justify-end gap-3"}>
           {building && (
             <>
               <RoundAction

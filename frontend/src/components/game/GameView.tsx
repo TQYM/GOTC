@@ -32,7 +32,7 @@ import { occupiedSet, tileAt, useGame } from "@/store/game";
 import { TILE_SPECS } from "@/lib/catalog";
 import { rememberRecent } from "@saves/lib/recent";
 import { ResourcePills } from "./MetricsPanel";
-import { ActionMenu } from "./ActionMenu";
+import { ActionRail } from "./ActionRail";
 import DemandPanel from "./DemandPanel";
 import SpeedControl from "./SpeedControl";
 import { WeatherBadge } from "./WeatherBadge";
@@ -419,26 +419,30 @@ export default function GameView({
 
         {/* HUD 层：不拦截场景操作，只有具体控件接收事件 */}
         <div className="pointer-events-none absolute inset-0 z-10">
-          <ActionMenu />
+          <ActionRail />
 
+          {/* 左上：城市牌 */}
           <div className="absolute left-4 top-4">
             <TopBar title={selectedLabel?.name ?? regionName ?? null} />
           </div>
+
+          {/* 中上：资源条 */}
           <div className="absolute left-1/2 top-4 hidden -translate-x-1/2 lg:block">
             <ResourcePills />
           </div>
-          <div className="absolute left-1/2 top-[4.75rem] hidden -translate-x-1/2 lg:block">
+
+          {/* 右上：时间 + 天气（用户要求：天气进顶栏、时间放右上角） */}
+          <div className="absolute right-3 top-3 flex flex-col items-end gap-1.5">
             <SpeedControl />
-        <div className="absolute bottom-24 right-4">
-          <TileActions />
-        </div>
-        <div className="absolute left-1/2 top-[12.5rem] -translate-x-1/2">
-          <WeatherBadge />
-        </div>
+            <WeatherBadge />
           </div>
 
+          {/* 右下：选中地块的操作 */}
+          <div className="absolute bottom-24 right-4">
+            <TileActions />
+          </div>
 
-          {/* PR-36：全域地图数据状态 / 视角预设控制（右上，避开 InspectorPanel） */}
+          {/* PR-36：全域地图数据状态 / 视角预设控制 */}
           <div className="pointer-events-none absolute bottom-28 right-3 z-10 sm:bottom-auto sm:top-36">
             {withWorldMap && (
             <MapHud
@@ -451,6 +455,7 @@ export default function GameView({
             )}
           </div>
 
+          {/* 左下：建造工具 */}
           <div className="absolute bottom-3 left-3">
             <AbilityDock
               buildOpen={buildOpen}
@@ -460,12 +465,9 @@ export default function GameView({
             />
           </div>
 
+          {/* 新闻条 */}
           <div className="absolute bottom-[10.5rem] left-4">
             <NewsTicker onOpenFeed={() => setPanelTab("feed")} />
-          </div>
-
-          <div className="absolute bottom-[13.5rem] left-20">
-            <DemandPanel />
           </div>
 
           <SideDock />
