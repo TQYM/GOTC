@@ -41,11 +41,121 @@ export interface Agent {
   hz: number;
   dx: number;
   dz: number;
-  /** L 形折线的拐点（先横后纵或先纵后横，按哈希定） */
+  /** L 形折线的拐点（walkOnRoads 找不到路时的兜底） */
   cx: number;
   cz: number;
   phase: number;
   speed: number;
+  /** 沿道路的折线（世界坐标交错存 [x0,z0,x1,z1,…]）；为空则退回 L 形 */
+  path?: number[];
+  /** 与 path 等长的累积弧长，末项是总长 */
+  cum?: number[];
+}
+
+/**
+ * 给定进度 t∈[0,1]，沿 path 折线取点；path 为空时退回 L 形。
+ *
+ * 与直线插值的区别：每个拐角都是真实路口，人不会穿楼而过。
+ */
+export function pathPosition(path: number[], cum: number[], t: number): { x: number; z: number } {
+  const n = cum.length;
+  if (n < 2) return { x: path[0] ?? 0, z: path[1] ?? 0 };
+  const total = cum[n - 1] || 1;
+  const target = Math.min(1, Math.max(0, t)) * total;
+  // 二分找段：160 个代理 × 60 点，线性也够，但二分更稳
+  let lo = 0;
+  let hi = n - 1;
+  while (lo + 1 < hi) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] <= target) lo = mid;
+    else hi = mid;
+  }
+  const seg = cum[hi] - cum[lo] || 1;
+  const k = (target - cum[lo]) / seg;
+  return {
+    x: path[lo * 2] + (path[hi * 2] - path[lo * 2]) * k,
+    z: path[lo * 2 + 1] + (path[hi * 2 + 1] - path[lo * 2 + 1]) * k,
+  };
+}
+
+/** 道路格：玩家铺的 trans_* 或真实片区的 road_inherited。 */
+function isRoad(parcel: Parcel, tiles: Tile[], r: number, c: number): boolean {
+  const t = parcel.terrain[r]?.[c];
+  if (t === "road_inherited") return true;
+  for (const tile of tiles) {
+    if (!tile.type.startsWith("trans_")) continue;
+    for (const [tr, tc] of tile.cells) if (tr === r && tc === c) return true;
+  }
+  return false;
+}
+
+/**
+ * BFS 在道路格上找 home→dest 的路径，返回世界坐标折线。
+ *
+ * 走 4 邻域（曼哈顿），因为路网本身是正交的；8 邻域会让斜穿街角。
+ * 找不到路（没铺路 / 两端不在路上）时返回 null，调用方退回 L 形。
+ */
+function findRoadPath(
+  parcel: Parcel,
+  tiles: Tile[],
+  grid: { size: number; cell: number; originX: number; originZ: number },
+  from: [number, number],
+  to: [number, number],
+): number[] | null {
+  const size = grid.size;
+  const key = (r: number, c: number) => r * size + c;
+  const start = key(from[0], from[1]);
+  const goal = key(to[0], to[1]);
+  if (start === goal) return null;
+
+  const prev = new Int32Array(size * size).fill(-2);
+  prev[start] = -1;
+  const queue: number[] = [start];
+  let head = 0;
+  let found = false;
+  while (head < queue.length) {
+    const cur = queue[head++] as number;
+    if (cur === goal) { found = true; break; }
+    const r = Math.floor(cur / size);
+    const c = cur % size;
+    const neighbours = [
+      [r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1],
+    ];
+    for (const [nr, nc] of neighbours) {
+      if (nr < 0 || nc < 0 || nr >= size || nc >= size) continue;
+      const nk = key(nr, nc);
+      if (prev[nk] !== -2) continue;
+      // 终点格本身可能是建筑，允许作为终点；中间必须可通行
+      if (!isRoad(parcel, tiles, nr, nc) && nk !== goal) continue;
+      prev[nk] = cur;
+      queue.push(nk);
+    }
+  }
+  if (!found) return null;
+
+  const cells: [number, number][] = [];
+  for (let cur = goal; cur !== -1; cur = prev[cur]) {
+    cells.push([Math.floor(cur / size), cur % size]);
+    if (cells.length > 96) break;
+  }
+  cells.reverse();
+  const out: number[] = [];
+  for (const [r, c] of cells) {
+    const x = grid.originX + (c + 0.5) * grid.cell;
+    const z = grid.originZ + (r + 0.5) * grid.cell;
+    out.push(x, z);
+  }
+  return out;
+}
+
+function cumulative(path: number[]): number[] {
+  const cum: number[] = [0];
+  for (let i = 1; i * 2 + 1 < path.length; i += 1) {
+    const dx = path[i * 2] - path[(i - 1) * 2];
+    const dz = path[i * 2 + 1] - path[(i - 1) * 2 + 1];
+    cum.push(cum[i - 1] + Math.hypot(dx, dz));
+  }
+  return cum;
 }
 
 /**
@@ -84,6 +194,17 @@ export function CitizenDots({
   existingCells?: Set<string>;
 }) {
   const grid = useMemo(() => gridOf(parcel), [parcel]);
+  // findRoadPath 需要世界坐标原点；cellToWorld 的内部换算等价于
+  // origin = -(size * cell)/2
+  const gridForPath = useMemo(
+    () => ({
+      size: grid.size,
+      cell: grid.cell,
+      originX: -(grid.size * grid.cell) / 2,
+      originZ: -(grid.size * grid.cell) / 2,
+    }),
+    [grid],
+  );
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
 
@@ -137,6 +258,8 @@ export function CitizenDots({
       const oz = (((seed >>> 7) & 15) / 15 - 0.5) * spread;
       const cx = (seed & 1) === 0 ? dx : hx;
       const cz = (seed & 1) === 0 ? hz : dz;
+      // 沿道路走：BFS 找不到路（没铺路 / 端点不在路上）就退回 L 形
+      const road = findRoadPath(parcel, tiles, gridForPath, home.anchor, dest.anchor);
       out.push({
         hx: hx + ox,
         hz: hz + oz,
@@ -146,6 +269,9 @@ export function CitizenDots({
         cz,
         phase: ((seed >>> 11) & 1023) / 1023,
         speed: WALK_SPEED * (0.7 + ((seed >>> 17) & 7) / 7 * 0.6),
+        ...(road
+          ? { path: road, cum: cumulative(road) }
+          : {}),
       });
     }
     return out;
@@ -163,14 +289,23 @@ export function CitizenDots({
       const forward = cycle <= 1;
       const t = forward ? cycle : 2 - cycle;
 
-      const { x, z } = agentPosition(agent, t);
+      const { x, z } =
+        agent.path && agent.cum && agent.cum.length > 1
+          ? pathPosition(agent.path, agent.cum, t)
+          : agentPosition(agent, t);
 
       dummy.position.set(x, y, z);
       // 走动时上下轻微起伏，远看像步行而不是滑行
       dummy.position.y = y + Math.abs(Math.sin(time * 6 + agent.phase * 6.28)) * 0.18;
+      // 朝向取「下一帧位置 - 当前位置」，沿路径时自然朝行进方向
+      const ahead = Math.min(1, t + 0.01);
+      const np =
+        agent.path && agent.cum && agent.cum.length > 1
+          ? pathPosition(agent.path, agent.cum, ahead)
+          : agentPosition(agent, ahead);
       dummy.rotation.y = Math.atan2(
-        forward ? agent.dx - agent.cx : agent.hx - agent.cx,
-        forward ? agent.dz - agent.cz : agent.hz - agent.cz,
+        forward ? np.x - x : x - np.x,
+        forward ? np.z - z : z - np.z,
       );
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);

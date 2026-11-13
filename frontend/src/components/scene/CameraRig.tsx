@@ -178,6 +178,21 @@ export default function CameraRig({
       camera.position.z += dz;
       c.update();
     }
+    // 相机自身也不能跑到地图外——只钳 target 的话，拉远/侧移时相机
+    // 会飘到棋盘边缘之外，视野里出现一片虚空。留 1.15 倍余量让边缘
+    // 地块能贴边看，但不允许继续往外走。
+    const camX = THREE.MathUtils.clamp(camera.position.x, cx - limX * 1.15, cx + limX * 1.15);
+    const camZ = THREE.MathUtils.clamp(camera.position.z, cz - limZ * 1.15, cz + limZ * 1.15);
+    if (camX !== camera.position.x || camZ !== camera.position.z) {
+      const dx = camX - camera.position.x;
+      const dz = camZ - camera.position.z;
+      camera.position.x = camX;
+      camera.position.z = camZ;
+      // target 同步平移，保持观察角度不变（否则相机会突然转向地图中心）
+      c.target.x += dx;
+      c.target.z += dz;
+      c.update();
+    }
     if (onTargetChange) {
       const last = lastReport.current;
       if (
