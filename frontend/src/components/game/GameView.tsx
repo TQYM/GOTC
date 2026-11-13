@@ -41,7 +41,6 @@ import { TileActions } from "./TileActions";
 
 
 
-import { MilestoneBar } from "./MilestoneBar";
 
 import ReportSummary from "./ReportSummary";
 import RemoveConfirm from "./RemoveConfirm";
@@ -419,7 +418,7 @@ export default function GameView({
 
         {/* HUD 层：不拦截场景操作，只有具体控件接收事件 */}
         <div className="pointer-events-none absolute inset-0 z-10">
-          <ActionRail />
+          <ActionRail hidden={buildOpen} />
 
           {/* 左上：城市牌 */}
           <div className="absolute left-4 top-4">
@@ -472,7 +471,6 @@ export default function GameView({
 
           <SideDock />
 
-        <MilestoneBar />
 
           {panelTab && (
             <div className="absolute bottom-4 right-4 top-[8.5rem] z-20 w-[min(23rem,88vw)]">

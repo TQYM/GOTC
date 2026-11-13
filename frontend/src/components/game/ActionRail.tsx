@@ -15,7 +15,7 @@ import { useGame } from "@/store/game";
 import { InfoViewBar } from "./InfoViewBar";
 import PhaseBanner from "./PhaseBanner";
 
-export function ActionRail() {
+export function ActionRail({ hidden = false }: { hidden?: boolean } = {}) {
   const [layersOpen, setLayersOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement | null>(null);
 
@@ -36,7 +36,7 @@ export function ActionRail() {
   }, [layersOpen]);
 
   return (
-    <div ref={boxRef} className="pointer-events-auto absolute right-3 top-[8.75rem] z-30 flex flex-col items-end gap-1.5">
+    <div ref={boxRef} className={`pointer-events-auto absolute right-3 top-[8.75rem] z-30 flex flex-col items-end gap-1.5 transition-opacity duration-150 ${hidden ? "pointer-events-none opacity-0" : "opacity-100"}`}>
       {/* 竖排操作：PhaseBanner 的 inline 模式本身就是 flex-col */}
       <div className="px-panel flex flex-col items-center gap-1.5 p-1.5">
         <PhaseBanner inline />

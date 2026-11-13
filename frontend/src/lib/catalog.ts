@@ -32,7 +32,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "residential",
     footprint: [1, 1],
     cost: 80_000,
-    blurb: "住 300 人",
+    blurb: "住 150 人",
   },
   res_mid: {
     type: "res_mid",
@@ -40,7 +40,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "residential",
     footprint: [1, 1],
     cost: 220_000,
-    blurb: "住 900 人",
+    blurb: "住 450 人",
   },
   res_high: {
     type: "res_high",
@@ -48,7 +48,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "residential",
     footprint: [1, 1],
     cost: 600_000,
-    blurb: "住 2400 人",
+    blurb: "住 1200 人",
   },
   com_shop: {
     type: "com_shop",
@@ -56,7 +56,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "commercial",
     footprint: [1, 1],
     cost: 300_000,
-    blurb: "80 个岗位",
+    blurb: "120 个岗位",
   },
   com_cbd: {
     type: "com_cbd",
@@ -64,7 +64,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "commercial",
     footprint: [2, 2],
     cost: 2_200_000,
-    blurb: "1200 个岗位",
+    blurb: "1800 个岗位",
   },
   ind_light: {
     type: "ind_light",
@@ -72,7 +72,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "industrial",
     footprint: [2, 2],
     cost: 1_500_000,
-    blurb: "900 个岗位",
+    blurb: "400 个岗位",
   },
   ind_heavy: {
     type: "ind_heavy",
@@ -80,7 +80,7 @@ export const TILE_SPECS: Record<TileType, TileSpec> = {
     category: "industrial",
     footprint: [3, 3],
     cost: 4_000_000,
-    blurb: "2600 个岗位 · 有污染",
+    blurb: "800 个岗位 · 有污染",
   },
   green_park: {
     type: "green_park",
