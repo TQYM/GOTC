@@ -621,9 +621,9 @@ export function BuildableLayer({
         transparent: true,
         opacity: 0.42,
         depthWrite: false,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -1,
+        // 可建区遮罩铺在 y=3，必须按真实深度测试：
+        // 之前加的 polygonOffset(-1) 把它推到所有几何体前面，
+        // 于是 20m 高的楼被 3m 高的半透明紫格盖住，看起来像「楼塌了」。
       }),
     [],
   );
