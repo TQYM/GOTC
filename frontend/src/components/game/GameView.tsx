@@ -153,7 +153,10 @@ export default function GameView({
   const sceneBox = useRef<HTMLDivElement>(null);
   // PR-36：北京全域地图作为背景，可玩沙盘嵌在 CBD 片区（v1 沙盘规格 48×48 @50m）
   // 东西朝海棋盘本身已覆盖 48km 全域，不再叠加全域地图层（会与 400m 棋盘地形重叠）
-  const withWorldMap = !parcel || parcel.parcel_id !== "beijing_core";
+  // 只有 48km 全域棋盘（beijing_core）才需要叠全北京底图。
+  // beijing_cbd 是 2.4km 精细片区，底图会把它压成屏幕中间一小块，
+  // 看上去像「地图崩了」——所以精细片区不叠。
+  const withWorldMap = parcel?.parcel_id === "beijing_core";
   const parcelLabelsUrl =
     !withWorldMap && parcel
       ? withBase(`/static/parcels/${parcel.parcel_id}/labels.json`)
