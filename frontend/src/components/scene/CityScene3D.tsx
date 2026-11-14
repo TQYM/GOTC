@@ -24,6 +24,7 @@ import { SCENE_COLORS } from "@/lib/palette";
 import CameraRig from "./CameraRig";
 import PixelPass from "./PixelPass";
 import { CitizenDots } from "./CitizenDots";
+import { Vehicles } from "./Vehicles";
 import RealCityLayers from "./RealCityLayers";
 import { useGame } from "@/store/game";
 import { usePrefs } from "@/store/prefs";
@@ -656,6 +657,7 @@ export default function CityScene3D({
           )}
           <TileLayer parcel={parcel} tiles={tiles} />
           <ServiceRings parcel={parcel} tiles={tiles} />
+          <Vehicles parcel={parcel} tiles={tiles} />
           <CitizenDots parcel={parcel} tiles={tiles} population={citizenPopulation} existingCells={existingCells} />
         <TransitLines parcel={parcel} tiles={tiles} transit={transit} />
           {showBuildable ? (

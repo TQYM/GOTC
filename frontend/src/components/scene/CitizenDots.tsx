@@ -79,7 +79,7 @@ export function pathPosition(path: number[], cum: number[], t: number): { x: num
 }
 
 /** 道路格：玩家铺的 trans_* 或真实片区的 road_inherited。 */
-function isRoad(parcel: Parcel, tiles: Tile[], r: number, c: number): boolean {
+export function isRoad(parcel: Parcel, tiles: Tile[], r: number, c: number): boolean {
   const t = parcel.terrain[r]?.[c];
   if (t === "road_inherited") return true;
   for (const tile of tiles) {
@@ -95,7 +95,7 @@ function isRoad(parcel: Parcel, tiles: Tile[], r: number, c: number): boolean {
  * 走 4 邻域（曼哈顿），因为路网本身是正交的；8 邻域会让斜穿街角。
  * 找不到路（没铺路 / 两端不在路上）时返回 null，调用方退回 L 形。
  */
-function findRoadPath(
+export function findRoadPath(
   parcel: Parcel,
   tiles: Tile[],
   grid: { size: number; cell: number; originX: number; originZ: number },
@@ -148,7 +148,7 @@ function findRoadPath(
   return out;
 }
 
-function cumulative(path: number[]): number[] {
+export function cumulative(path: number[]): number[] {
   const cum: number[] = [0];
   for (let i = 1; i * 2 + 1 < path.length; i += 1) {
     const dx = path[i * 2] - path[(i - 1) * 2];
@@ -281,7 +281,8 @@ export function CitizenDots({
     const mesh = meshRef.current;
     if (!mesh || agents.length === 0) return;
     const time = state.clock.elapsedTime;
-    const y = 2.4;
+    // 贴路面：抬到建筑顶会像「悬浮的点」，人应该在地面层可见
+    const y = grid.cell * 0.09;
     for (let i = 0; i < agents.length; i += 1) {
       const agent = agents[i];
       // 0..2 往返：0→1 去程，1→2 回程
@@ -296,7 +297,7 @@ export function CitizenDots({
 
       dummy.position.set(x, y, z);
       // 走动时上下轻微起伏，远看像步行而不是滑行
-      dummy.position.y = y + Math.abs(Math.sin(time * 6 + agent.phase * 6.28)) * 0.18;
+      dummy.position.y = y + Math.abs(Math.sin(time * 6 + agent.phase * 6.28)) * grid.cell * 0.02;
       // 朝向取「下一帧位置 - 当前位置」，沿路径时自然朝行进方向
       const ahead = Math.min(1, t + 0.01);
       const np =
