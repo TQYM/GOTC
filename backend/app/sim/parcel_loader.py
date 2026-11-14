@@ -27,9 +27,25 @@ def load_parcel(
         raw_chunks = raw_buildings.get("chunks")
         if raw_chunks is None:
             raw_chunks = {"flat": raw_buildings.get("buildings", [])}
-        assets = [
-            ExistingAsset.model_validate(item) for chunk in raw_chunks.values() for item in chunk
-        ]
+        # 数据包只给 category / levels / footprint，没有人口与岗位。
+        # 按「楼层占比」把北京实际数字摊到每栋：
+        #   常住人口 21,858,440（北京统计局 2023 年末）÷ 住宅总楼层 120,928 ≈ 181 人/层
+        #   就业岗位 13,000,000（北京统计年鉴）÷ 岗位总楼层 31,944 ≈ 407 岗/层
+        # 这样开局的人口/岗位直接等于北京现状，而不是从 0 长起。
+        PEOPLE_PER_FLOOR = 181
+        JOBS_PER_FLOOR = 407
+        assets = []
+        for chunk in raw_chunks.values():
+            for item in chunk:
+                levels = int(item.get("levels") or 1)
+                category = item.get("category")
+                if category == "residential":
+                    extra = {"population": levels * PEOPLE_PER_FLOOR, "jobs": 0}
+                elif category in ("workplace", "industrial"):
+                    extra = {"population": 0, "jobs": levels * JOBS_PER_FLOOR}
+                else:
+                    extra = {"population": 0, "jobs": 0}
+                assets.append(ExistingAsset.model_validate({**item, **extra}))
     except (OSError, ValueError) as exc:
         raise GameError(
             ErrorCode.INTERNAL_ERROR,

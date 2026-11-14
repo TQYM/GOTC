@@ -22,7 +22,6 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import type { GhostSpec, PresetKey } from "@/components/scene/CityScene3D";
-import MapHud from "@/components/scene/map/MapHud";
 import { useFullMap } from "@/lib/map/loader";
 import type { Cell, TileType } from "@/lib/contract";
 import type { CityApi } from "@/lib/api";
@@ -445,18 +444,6 @@ export default function GameView({
             <TileActions />
           </div>
 
-          {/* PR-36：全域地图数据状态 / 视角预设控制 */}
-          <div className="pointer-events-none absolute bottom-28 right-3 z-10 sm:bottom-auto sm:top-36">
-            {withWorldMap && (
-            <MapHud
-              state={mapState}
-              retry={retryMap}
-              onPreset={(key) =>
-                setPreset((p) => ({ key, token: (p?.token ?? 0) + 1 }))
-              }
-            />
-            )}
-          </div>
 
           {/* 左下：建造工具 */}
           <div className="absolute bottom-3 left-3">
