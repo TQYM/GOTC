@@ -196,7 +196,13 @@ function ExistingBuildings({
       lastWorldSize.current = worldSize;
       lastVisibleSignature.current = null;
     }
-    const next = getVisibleChunkKeys(chunks, camera, neighborMargin);
+    // 48km 全城棋盘不做视锥裁剪：玩家要的是「一眼看到全北京」，
+    // 只加载视野内的 chunk 会让地图看起来「只有一部分区块」。
+    // 2.4km 精细片区仍按视锥裁剪，省显存。
+    const next =
+      worldSize > 10000
+        ? chunks.map((chunk) => chunk.key)
+        : getVisibleChunkKeys(chunks, camera, neighborMargin);
     const signature = next.join("|");
     if (signature === lastVisibleSignature.current) return;
     lastVisibleSignature.current = signature;

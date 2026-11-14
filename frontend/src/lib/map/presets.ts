@@ -44,12 +44,13 @@ export function presetShot(
   };
   switch (key) {
     case "all": {
-      // 核心区全景：从东西朝海上空向南俯瞰，48km 见方刚好铺满视野
+      // 核心区俯视。48km 棋盘若从 55km 高空看，20m 的楼只剩 0.04% 视高，
+      // 整片会摊成彩色色块；压到 span*0.22（约 10km 高）才能看出楼是立体的。
       const core = coreRectWorld(f);
       const span = Math.max(core.halfX, core.halfZ) * 2;
       return {
-        pos: [core.centerX, span * 1.15, core.centerZ + span * 1.25],
-        target: [core.centerX, 0, core.centerZ - span * 0.08],
+        pos: [core.centerX, span * 0.22, core.centerZ + span * 0.26],
+        target: [core.centerX, 0, core.centerZ - span * 0.02],
       };
     }
     case "mountain":
