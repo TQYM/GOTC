@@ -156,10 +156,11 @@ export default function GameView({
   // 只有 48km 全域棋盘（beijing_core，120×120×400m）才叠全北京底图；
   // beijing_cbd 是 2.4km 精细片区，叠底图会让它缩成屏幕中间一小块。
   const withWorldMap = parcel?.parcel_id === "beijing_core";
-  const parcelLabelsUrl =
-    !withWorldMap && parcel
-      ? withBase(`/static/parcels/${parcel.parcel_id}/labels.json`)
-      : null;
+  // 地名标签与「是否叠全域底图」无关：beijing_core 有 3477 条真实地名
+  // （朝阳区 / 国贸 / 故宫…），beijing_cbd 也有自己那份，一律加载。
+  const parcelLabelsUrl = parcel
+    ? withBase(`/static/parcels/${parcel.parcel_id}/labels.json`)
+    : null;
 
   // 左上角标题：选中建筑 > 视野所在的区 > 城市名
   const [districtAnchors, setDistrictAnchors] = useState<
