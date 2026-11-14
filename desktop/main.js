@@ -49,6 +49,17 @@ function root() {
 function serve() {
   const dir = root();
   const server = http.createServer((req, res) => {
+    // 静态包里 API_BASE 是空串（同源），所以 /api 与 /static 要反代到后端。
+    // 这样不用在 build 时注入绝对地址，换端口也不用重新构建。
+    if (/^\/(api|static)\//.test(req.url || "")) {
+      const proxied = http.request(
+        { host: "127.0.0.1", port: API_PORT, path: req.url, method: req.method, headers: req.headers },
+        (up) => { res.writeHead(up.statusCode || 502, up.headers); up.pipe(res); }
+      );
+      proxied.on("error", () => { res.writeHead(502).end("backend unavailable"); });
+      req.pipe(proxied);
+      return;
+    }
     let p = decodeURIComponent((req.url || "/").split("?")[0]);
     if (p.endsWith("/")) p += "index.html";
     let file = path.join(dir, p);
