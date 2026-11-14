@@ -406,7 +406,7 @@ export default function GameView({
                 });
               }}
               onRightClick={exitTool}
-              map={withWorldMap && mapState.status === "ready" ? mapState.data : null}
+              map={null}
               parcelLabelsUrl={parcelLabelsUrl}
               initialPreset="cbd"
               labelTopInset={64}
