@@ -54,6 +54,12 @@ import { humanizeError, yuan } from "@/lib/api/humanize";
 import { TILE_SPECS } from "@/lib/catalog";
 import { checkPlacement, estimateRefund, occupiedKey } from "@/lib/validate";
 import { withBase } from "@/lib/api/base";
+import {
+  detectNew,
+  loadUnlocked,
+  saveUnlocked,
+  type Achievement,
+} from "@/lib/achievements";
 
 export type Tool =
   | { kind: "select" }
@@ -172,6 +178,10 @@ interface GameState {
   toggleCitizenPanel(): void;
   /** 信息视图：默认 / 地价 / 污染 / 交通（对标 C:S 的 InfoManager 视图） */
   infoView: InfoViewType;
+  /** 成就弹窗队列；一次只显示 queue[0] */
+  achievementQueue: Achievement[];
+  /** 已解锁的成就 id（localStorage 持久化，跨存档共享） */
+  unlockedAchievements: Set<string>;
   /** 当前模拟帧（一年 3600 帧） */
   simFrame: number;
 
@@ -182,6 +192,10 @@ interface GameState {
   setSpeed(speed: 0 | 1 | 2 | 3): Promise<void>;
   zoneAt(type: TileType, anchor: [number, number], rows: number, cols: number): Promise<void>;
   setInfoView(view: InfoViewType): void;
+  /** 出队当前成就弹窗 */
+  dismissAchievement(): void;
+  /** 每 tick 检测一次；只在有新达成时 set */
+  checkAchievements(): void;
   setTaxRate(service: string, rate: number): Promise<void>;
   takeLoan(amount: number, months?: number): Promise<void>;
   applyEvent(e: StreamEvent): void;
@@ -373,6 +387,9 @@ export const useGame = create<GameState>()((set, get) => {
     districtPanelOpen: true,
     citizenPanelOpen: true,
     infoView: "default",
+    achievementQueue: [],
+    unlockedAchievements: new Set<string>(),
+
     simFrame: 0,
 
     async init(api, id) {
@@ -415,6 +432,8 @@ export const useGame = create<GameState>()((set, get) => {
     },
 
     connect() {
+      // 成就跨存档共享：进游戏就把本地档案读回来，避免重复弹同一批
+      set({ unlockedAchievements: loadUnlocked() });
       const { api, id } = get();
       if (!api || !id) return () => {};
       let wasDown = false;
@@ -579,6 +598,30 @@ export const useGame = create<GameState>()((set, get) => {
       set({ infoView: view });
     },
 
+    dismissAchievement() {
+      set((state) => ({ achievementQueue: state.achievementQueue.slice(1) }));
+    },
+
+    checkAchievements() {
+      const state = get();
+      const ctx = {
+        metrics: state.metrics,
+        cityYear: state.cityYear,
+        buildsTotal: state.buildsTotal,
+        districtCount: state.districts.length,
+        transitCount: state.transit.length,
+      };
+      const fresh = detectNew(ctx, state.unlockedAchievements);
+      if (fresh.length === 0) return;
+      const next = new Set(state.unlockedAchievements);
+      for (const item of fresh) next.add(item.id);
+      saveUnlocked(next);
+      set({
+        unlockedAchievements: next,
+        achievementQueue: [...state.achievementQueue, ...fresh],
+      });
+    },
+
     async setTaxRate(service, rate) {
       const { api, id } = get();
       if (!api?.setTaxRate || !id) return;
@@ -663,6 +706,8 @@ export const useGame = create<GameState>()((set, get) => {
               : {}),
             ...(d.metrics ? { metrics: d.metrics } : {}),
           });
+          // 成就判定放在 metrics 落地之后：checkAchievements 读的是 get().metrics
+          get().checkAchievements();
           return;
         }
         case "snapshot":

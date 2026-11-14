@@ -45,6 +45,7 @@ import { TileActions } from "./TileActions";
 import ReportSummary from "./ReportSummary";
 import RemoveConfirm from "./RemoveConfirm";
 import Toasts from "./Toasts";
+import { AchievementModal } from "./AchievementModal";
 import { SideDock } from "./SideDock";
 import { TutorialOverlay } from "./TutorialOverlay";
 import TileSheet from "@/components/hud/TileSheet";
@@ -521,6 +522,7 @@ export default function GameView({
 
           <ReportSummary />
           <Toasts />
+        <AchievementModal />
       <TutorialOverlay />
           <TileSheet />
 
