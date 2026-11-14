@@ -15,15 +15,6 @@ import { useEffect, useState } from "react";
 import { useGame } from "@/store/game";
 import type { Achievement, AchievementTone } from "@/lib/achievements";
 
-const DEMO_ACHIEVEMENT: Achievement = {
-  id: "demo",
-  title: "第一铲土",
-  desc: "在真实北京的地块上放下第一栋建筑",
-  icon: "⌂",
-  tone: "sun",
-  check: () => true,
-};
-
 const TONE_STYLES: Record<AchievementTone, { bg: string; border: string; ink: string }> = {
   ok: { bg: "#3DD68C", border: "#2A2340", ink: "#123B24" },
   sun: { bg: "#FFC93C", border: "#2A2340", ink: "#4A3608" },
@@ -34,12 +25,7 @@ const TONE_STYLES: Record<AchievementTone, { bg: string; border: string; ink: st
 
 export function AchievementModal() {
   const queue = useGame((s) => s.achievementQueue);
-  // 演示入口：URL 带 ?demo-achievement=1 时固定塞一个成就，用来核对弹窗样式
-  const demo = typeof window !== "undefined"
-    && new URLSearchParams(window.location.search).has("demo-achievement");
-  const shown = demo && queue.length === 0
-    ? [DEMO_ACHIEVEMENT]
-    : queue;
+  const shown = queue;
   const dismiss = useGame((s) => s.dismissAchievement);
   const [leaving, setLeaving] = useState(false);
   const current: Achievement | undefined = shown[0];
@@ -51,10 +37,10 @@ export function AchievementModal() {
 
   // 8 秒自动收起：玩家可能已经切走了，留一个不关的窗口很难受
   useEffect(() => {
-    if (!current || demo) return;   // 演示模式不自动收起，方便截图核对
+    if (!current) return;
     const timer = window.setTimeout(() => setLeaving(true), 8_000);
     return () => window.clearTimeout(timer);
-  }, [current?.id, demo]);
+  }, [current?.id]);
 
   // 离场动画结束后再真正出队
   useEffect(() => {
